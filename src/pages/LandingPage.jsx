@@ -82,7 +82,7 @@ export default function LandingPage() {
               onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
               onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
             >
-              <ShieldCheck size={20} /> Host Tournament
+              <ShieldCheck size={20} /> Host / Join as Owner
             </button>
             
             <button 
@@ -94,7 +94,7 @@ export default function LandingPage() {
               onMouseEnter={e => { e.currentTarget.style.borderColor = '#000'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(0)'; }}
             >
-              <Users size={20} /> Join as Owner
+              <Users size={20} /> Register as Player
             </button>
             
             <button 
