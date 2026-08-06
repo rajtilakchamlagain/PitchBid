@@ -387,6 +387,44 @@ export default function AuctionRoom() {
     );
   };
 
+  // Touch Handlers for Swipe Navigation
+  const touchStartRef = useRef(null);
+  const touchEndRef = useRef(null);
+  const touchStartY = useRef(null);
+  const touchEndY = useRef(null);
+
+  const onTouchStart = (e) => {
+    touchEndRef.current = null;
+    touchEndY.current = null;
+    touchStartRef.current = e.targetTouches[0].clientX;
+    touchStartY.current = e.targetTouches[0].clientY;
+  };
+
+  const onTouchMove = (e) => {
+    touchEndRef.current = e.targetTouches[0].clientX;
+    touchEndY.current = e.targetTouches[0].clientY;
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStartRef.current || !touchEndRef.current) return;
+    const distanceX = touchStartRef.current - touchEndRef.current;
+    const distanceY = touchStartY.current - touchEndY.current;
+    
+    // Ignore swipe if vertical scrolling is dominant
+    if (Math.abs(distanceY) > Math.abs(distanceX)) return;
+
+    const isLeftSwipe = distanceX > 50;
+    const isRightSwipe = distanceX < -50;
+
+    if (isLeftSwipe) {
+      if (mobileTab === 'left') setMobileTab('center');
+      else if (mobileTab === 'center') setMobileTab('right');
+    } else if (isRightSwipe) {
+      if (mobileTab === 'right') setMobileTab('center');
+      else if (mobileTab === 'center') setMobileTab('left');
+    }
+  };
+
   const actionCenter = (
     <div className="glass-panel" style={{ padding: '2rem', textAlign: 'center', background: 'linear-gradient(180deg, rgba(30,30,35,0.8) 0%, rgba(20,20,24,0.9) 100%)', position: 'relative' }}>
       <p style={{ color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: '0.75rem', fontWeight: 'bold' }}>Current Bid</p>
@@ -451,7 +489,12 @@ export default function AuctionRoom() {
   );
 
   return (
-    <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+    <div 
+      style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+    >
       {renderRoomInfoModal()}
       
       <OnboardingTour role={isHost ? 'host' : 'owner'} />
