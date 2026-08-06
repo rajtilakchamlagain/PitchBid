@@ -38,20 +38,36 @@ export default function OwnerEntry() {
           const data = snap.data();
           const updates = {};
           
-          if (!data.playerCode || data.playerCode !== 'PLAYER52') {
+          if (!data.playerCode) {
             updates.ownerCode = 'PF52HZ';
             updates.playerCode = 'PLAYER52';
             updates.viewerCode = 'VIEWER52';
             updates.status = data.status || 'waiting';
+          }
+          
+          // Map existing owners, assign deterministic passwords without destroying names
+          if (data.owners && data.owners.length > 0 && !data.owners[0].pass) {
+            const deterministicPasswords = ['123456', '234567', '345678', '456789', '567890'];
+            let newOwners = [...data.owners];
             
-            // Generate exact passwords for the 4 slots
-            const newOwners = [
-              { name: data.owners?.[0]?.name || 'GSL Host', budget: 10000, isReady: false, pass: '123456' },
-              { name: null, budget: 10000, isReady: false, pass: '234567' },
-              { name: null, budget: 10000, isReady: false, pass: '345678' },
-              { name: null, budget: 10000, isReady: false, pass: '456789' }
-            ];
+            newOwners = newOwners.map((o, idx) => ({
+              ...o,
+              pass: deterministicPasswords[idx] || Math.floor(100000 + Math.random() * 900000).toString()
+            }));
+            
+            const numOwners = data.numOwners || 4;
+            while (newOwners.length < numOwners) {
+              newOwners.push({
+                name: null,
+                budget: data.budgetPerTeam || 10000,
+                isReady: false,
+                pass: deterministicPasswords[newOwners.length] || Math.floor(100000 + Math.random() * 900000).toString()
+              });
+            }
             updates.owners = newOwners;
+          }
+          
+          if (Object.keys(updates).length > 0) {
             await updateDoc(roomRef, updates);
           }
         }
