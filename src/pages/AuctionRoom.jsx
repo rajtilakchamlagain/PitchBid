@@ -487,12 +487,12 @@ export default function AuctionRoom() {
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '100%', background: 'radial-gradient(circle at 50% 0%, rgba(0, 255, 136, 0.1) 0%, transparent 70%)', zIndex: 0, pointerEvents: 'none' }} />
           
           {roomData.status === 'waiting' || roomData.status === 'break' ? (
-            <div className="animate-fade-in" style={{ zIndex: 1, width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem' }}>
+            <div className="animate-fade-in" style={{ zIndex: 1, width: '100%', minHeight: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem' }}>
               <div style={{ background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: '50%', marginBottom: '1.5rem' }}>
                 {roomData.status === 'break' ? <Clock size={48} color="#ffd700" /> : <Users size={48} color="var(--primary)" />}
               </div>
               
-              <h2 style={{ fontSize: '3rem', marginBottom: '1rem', letterSpacing: '-0.02em' }} className="text-gradient">
+              <h2 style={{ fontSize: '3rem', marginBottom: '1rem', letterSpacing: '-0.02em', textAlign: 'center' }} className="text-gradient">
                 {roomData.status === 'break' ? 'Coffee Break' : 'Awaiting Owners'}
               </h2>
               <p style={{ color: 'var(--text-muted)', marginBottom: '3rem', fontSize: '1.1rem', maxWidth: '400px', textAlign: 'center' }}>
@@ -519,7 +519,7 @@ export default function AuctionRoom() {
                 ))}
               </div>
 
-              <div style={{ display: 'flex', gap: '1rem' }}>
+              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', justifyContent: 'center' }}>
                 <button 
                   className={isMyReady ? "btn-outline" : "btn-primary"} 
                   onClick={handleReadyToggle} 
@@ -541,7 +541,7 @@ export default function AuctionRoom() {
               </div>
             </div>
           ) : (
-            <div style={{ padding: '3rem 2rem', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', zIndex: 1 }}>
+            <div style={{ padding: '3rem 2rem', width: '100%', minHeight: '100%', display: 'flex', flexDirection: 'column', zIndex: 1 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                 <h2 style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.3em' }}>On The Block</h2>
               </div>
@@ -612,7 +612,7 @@ export default function AuctionRoom() {
         </div>
 
         {/* Right Sidebar: Bidding Panel & Wallets */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', minHeight: 0 }}>
           
           {/* Action Center */}
           <div className="glass-panel" style={{ padding: '2rem', textAlign: 'center', background: 'linear-gradient(180deg, rgba(30,30,35,0.8) 0%, rgba(20,20,24,0.9) 100%)', position: 'relative' }}>
