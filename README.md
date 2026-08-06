@@ -1,16 +1,64 @@
-# React + Vite
+# 🏆 PitchBid
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+**PitchBid** is a premium, high-stakes sports auction and drafting platform designed for local tournaments and leagues. Built with a "million-dollar budget" aesthetic, PitchBid brings the thrill of professional franchise auctions (like the IPL) to village, community, and amateur sports levels.
 
-Currently, two official plugins are available:
+Currently optimized for **Football** drafts, PitchBid allows players to register their profiles and team owners to bid on talent in real-time within a secure, high-end digital auction room.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## ✨ Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **💎 Premium UI/UX:** Stunning dark mode aesthetics, glassmorphism design, custom gradients, and micro-animations that make the platform feel like a top-tier professional product.
+- **🏃‍♂️ Player Registration:** Seamless multi-step onboarding for athletes. Capture Real Names, Nick Names, Age, Top 3 Positions, and Preferred Foot.
+- **👑 Owner Dashboard:** Secure passcode entry and tournament hosting capabilities. Owners can generate new auction rooms, specify budgets, and invite other franchise owners via shareable magic links.
+- **🔨 Live Auction Room:** A dynamic bidding stage featuring player cards, live highest-bidder tracking, remaining budgets, and a countdown timer. 
 
-## Expanding the Oxlint configuration
+---
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+## 🚀 Tech Stack
+
+- **Frontend Framework:** React (bootstrapped with Vite)
+- **Styling:** Vanilla CSS (leveraging CSS Variables, Flexbox/Grid, and Keyframe Animations)
+- **Routing:** React Router DOM
+- **Icons:** Lucide React
+
+---
+
+## 🛠️ Getting Started
+
+### Prerequisites
+
+Ensure you have [Node.js](https://nodejs.org/) installed on your machine.
+
+### Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/rajtilakchamlagain/PitchBid.git
+   cd PitchBid
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Start the development server:
+   ```bash
+   npm run dev
+   ```
+
+4. Open your browser and navigate to `http://localhost:5173`.
+
+---
+
+## 🎮 How It Works
+
+1. **Host a Tournament (For Organizers/Owners):** Click "Enter as Owner", select "Host a New Tournament", specify the parameters, and generate your room. 
+2. **Share the Link:** Copy the magic invite link and share it with other team owners so they can join your lobby.
+3. **Register Players:** Athletes click "Enter as Player", input the Room Code, and submit their stats.
+4. **Start Bidding:** Once everyone is registered, enter the Auction Room and start bidding on your favorite local talents!
+
+---
+
+*Designed for the passion of local sports.*
