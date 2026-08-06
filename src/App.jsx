@@ -5,11 +5,13 @@ import OwnerEntry from './pages/OwnerEntry';
 import AuctionRoom from './pages/AuctionRoom';
 import ViewerEntry from './pages/ViewerEntry';
 import ViewerRoom from './pages/ViewerRoom';
+import FixDB from './FixDB';
 
 function App() {
   return (
     <Router>
-      <div className="app-container">
+      <div className="App">
+        <FixDB />
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/player-entry" element={<PlayerEntry />} />

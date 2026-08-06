@@ -1,20 +1,30 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Coins, Users, Send } from 'lucide-react';
-import { doc, onSnapshot, collection, query, orderBy, addDoc, serverTimestamp } from 'firebase/firestore';
+import { ArrowLeft, Coins, Clock, AlertTriangle, Users, MessageCircle, Send } from 'lucide-react';
+import { doc, onSnapshot, collection, query, orderBy, addDoc, serverTimestamp, limit } from 'firebase/firestore';
 import { db } from '../firebase';
 
 export default function ViewerRoom() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const roomCode = searchParams.get('room');
-  const myNickname = localStorage.getItem('pitchbid_viewer_name') || 'Anonymous';
   
   const [roomData, setRoomData] = useState(null);
+  const [players, setPlayers] = useState([]);
   const [activePlayer, setActivePlayer] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [chatInput, setChatInput] = useState('');
-  const chatEndRef = useRef(null);
+  
+  const [chatMessages, setChatMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [reactions, setReactions] = useState([]);
+
+  const viewerName = localStorage.getItem('pitchbid_viewer') || 'Anonymous Fan';
+
+  // For tracking animations
+  const prevBidRef = useRef(0);
+  const [pulseBid, setPulseBid] = useState(false);
+  const prevActivePlayerRef = useRef(null);
+  const [showSoldStamp, setShowSoldStamp] = useState(false);
+  const [soldToText, setSoldToText] = useState('');
 
   useEffect(() => {
     if (!roomCode) {
@@ -22,175 +32,338 @@ export default function ViewerRoom() {
       return;
     }
 
-    // Listen to Room Document
     const roomRef = doc(db, 'rooms', roomCode);
     const unsubRoom = onSnapshot(roomRef, (docSnap) => {
       if (docSnap.exists()) {
-        setRoomData(docSnap.data());
+        const data = docSnap.data();
+        setRoomData(data);
       }
     });
 
-    // Listen to Players Collection for active player
-    const qPlayers = query(collection(db, 'rooms', roomCode, 'players'));
-    const unsubPlayers = onSnapshot(qPlayers, (snapshot) => {
+    const q = query(collection(db, 'rooms', roomCode, 'players'));
+    const unsubPlayers = onSnapshot(q, (snapshot) => {
       const p = [];
       snapshot.forEach(d => p.push({ id: d.id, ...d.data() }));
-      
-      // Update active player if it changed
-      roomRef.id // just to trigger re-eval if needed, but we rely on roomData state in next hook
-      // Actually, since we need roomData.activePlayerId, we'll just handle it below
-      // Wait, we can't access state reliably here. We'll set a ref or just fetch the active player specifically.
-      // Better yet, just find the active player from the list:
-      const activeP = p.find(player => player.id === (docSnap?.data()?.activePlayerId || null));
-      if (activeP) setActivePlayer(activeP);
+      setPlayers(p);
     });
 
-    // Listen to Chat Messages
-    const qMessages = query(collection(db, 'rooms', roomCode, 'messages'), orderBy('createdAt', 'asc'));
-    const unsubMessages = onSnapshot(qMessages, (snapshot) => {
-      const m = [];
-      snapshot.forEach(d => m.push({ id: d.id, ...d.data() }));
-      setMessages(m);
-      setTimeout(() => {
-        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
+    const chatQ = query(collection(db, 'rooms', roomCode, 'chat'), orderBy('timestamp', 'asc'));
+    const unsubChat = onSnapshot(chatQ, (snapshot) => {
+      const msgs = [];
+      snapshot.forEach(d => msgs.push({ id: d.id, ...d.data() }));
+      setChatMessages(msgs);
+    });
+
+    // Listen for reactions
+    const reactQ = query(collection(db, 'rooms', roomCode, 'reactions'), orderBy('createdAt', 'desc'), limit(1));
+    let initialLoad = true;
+    const unsubReactions = onSnapshot(reactQ, (snap) => {
+      if (initialLoad) { initialLoad = false; return; }
+      snap.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          const r = change.doc.data();
+          const newReaction = { id: change.doc.id, emoji: r.emoji, x: Math.random() * 80 + 10 };
+          setReactions(prev => [...prev, newReaction]);
+          setTimeout(() => {
+            setReactions(prev => prev.filter(x => x.id !== newReaction.id));
+          }, 2000);
+        }
+      });
     });
 
     return () => {
       unsubRoom();
       unsubPlayers();
-      unsubMessages();
+      unsubChat();
+      unsubReactions();
     };
-  }, [roomCode]);
+  }, [roomCode, navigate]);
 
-  // Handle syncing active player when roomData updates
   useEffect(() => {
-    if (roomData && roomData.activePlayerId) {
-      // Just re-trigger the players listener or rely on it
-      // For viewer, we can just do a one-off fetch if needed, but onSnapshot handles it mostly.
-    } else {
-      setActivePlayer(null);
+    if (roomData) {
+      if (roomData.activePlayerId) {
+        const ap = players.find(p => p.id === roomData.activePlayerId);
+        if (ap) setActivePlayer(ap);
+        setShowSoldStamp(false);
+      } else {
+        if (prevActivePlayerRef.current && roomData.activePlayerId === null && roomData.status === 'live') {
+          const justSoldPlayer = players.find(p => p.id === prevActivePlayerRef.current);
+          if (justSoldPlayer && justSoldPlayer.status === 'sold') {
+             setSoldToText(justSoldPlayer.soldTo);
+             setShowSoldStamp(true);
+             setTimeout(() => setShowSoldStamp(false), 2000);
+          }
+        }
+        setActivePlayer(null);
+      }
+      prevActivePlayerRef.current = roomData.activePlayerId;
+
+      if (roomData.currentBid > prevBidRef.current) {
+        setPulseBid(true);
+        setTimeout(() => setPulseBid(false), 500);
+      }
+      prevBidRef.current = roomData.currentBid || 0;
     }
-  }, [roomData?.activePlayerId]);
+  }, [roomData?.activePlayerId, roomData?.currentBid, roomData?.status, players]);
+
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!chatInput.trim()) return;
+    if (!newMessage.trim()) return;
     
     try {
-      await addDoc(collection(db, 'rooms', roomCode, 'messages'), {
-        sender: myNickname,
-        text: chatInput.trim(),
-        createdAt: serverTimestamp()
+      await addDoc(collection(db, 'rooms', roomCode, 'chat'), {
+        text: newMessage,
+        sender: viewerName,
+        timestamp: serverTimestamp()
       });
-      setChatInput('');
+      setNewMessage('');
     } catch (err) {
       console.error(err);
     }
   };
 
-  if (!roomData) return <div className="min-h-screen flex-center"><h2 className="text-gradient">Loading Stream...</h2></div>;
+  const sendReaction = async (emoji) => {
+    await addDoc(collection(db, 'rooms', roomCode, 'reactions'), {
+      emoji,
+      createdAt: serverTimestamp()
+    });
+  };
+
+  if (!roomData) return <div className="min-h-screen flex-center"><h2 className="text-gradient pulse-gold">Tuning into Broadcast...</h2></div>;
+
+  const pendingPlayers = players.filter(p => p.status === 'pending');
+  const soldPlayers = players.filter(p => p.status === 'sold');
+  const unsoldPlayers = players.filter(p => p.status === 'unsold');
 
   return (
-    <div className="min-h-screen" style={{ padding: '1rem', display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      {/* Header */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <button className="btn-outline" style={{ padding: '8px 16px', border: 'none' }} onClick={() => navigate('/')}>
-            <ArrowLeft size={16} /> Exit Stream
-          </button>
-          <span style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>Viewing as: <span style={{ color: '#ff0080' }}>{myNickname}</span></span>
+    <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+      
+      {/* Reactions Layer */}
+      {reactions.map(r => (
+        <div key={r.id} className="float-emoji" style={{ left: `${r.x}%` }}>{r.emoji}</div>
+      ))}
+
+      {/* SOLD Animation Layer */}
+      {showSoldStamp && (
+        <div className="stamp-sold">
+          SOLD TO<br/>
+          <span style={{ fontSize: '2rem', color: '#fff', textShadow: 'none' }}>{soldToText}</span>
         </div>
-        <div style={{ background: 'rgba(255, 50, 50, 0.2)', padding: '5px 10px', borderRadius: '8px', color: '#ff4444', display: 'flex', alignItems: 'center', gap: '5px', fontWeight: 'bold' }}>
-          <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ff4444', animation: 'pulse 2s infinite' }} />
-          LIVE AUCTION
+      )}
+      
+      {/* Header */}
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexShrink: 0, padding: '0 1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+          <button className="btn-outline" style={{ padding: '8px 16px', border: 'none', background: 'rgba(255,255,255,0.05)' }} onClick={() => navigate('/')}>
+            <ArrowLeft size={16} /> Exit
+          </button>
+          
+          <span style={{ fontSize: '1rem', fontWeight: 'bold', color: 'var(--text-muted)' }}>
+            Viewing as: <span className="text-gradient-primary" style={{ fontSize: '1.2rem' }}>{viewerName}</span>
+          </span>
+        </div>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ 
+            background: roomData.status === 'live' ? 'rgba(255, 0, 68, 0.15)' : roomData.status === 'break' ? 'rgba(255, 215, 0, 0.15)' : 'rgba(0, 212, 255, 0.15)', 
+            padding: '8px 16px', 
+            borderRadius: '8px', 
+            color: roomData.status === 'live' ? '#ff0044' : roomData.status === 'break' ? '#ffd700' : 'var(--secondary)', 
+            display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', border: `1px solid ${roomData.status === 'live' ? 'rgba(255,0,68,0.3)' : 'rgba(255,255,255,0.1)'}`
+          }}>
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: roomData.status === 'live' ? '#ff0044' : roomData.status === 'break' ? '#ffd700' : 'var(--secondary)', animation: roomData.status === 'live' ? 'pulse 1s infinite' : 'none' }} />
+            {roomData.status.toUpperCase()}
+          </div>
         </div>
       </header>
 
-      <div style={{ display: 'flex', gap: '1rem', flex: 1, minHeight: 0, flexDirection: 'row', flexWrap: 'wrap' }}>
+      {/* Main Grid */}
+      <div className="dashboard-grid">
         
-        {/* Main Stage */}
-        <div className="glass-panel" style={{ flex: '2 1 400px', padding: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', overflow: 'hidden' }}>
-          
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '150px', background: 'linear-gradient(180deg, rgba(255, 0, 128, 0.1) 0%, transparent 100%)', zIndex: 0 }} />
-          
-          <h2 style={{ fontSize: '1.2rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.2em', zIndex: 1, marginBottom: '2rem' }}>Main Stage</h2>
-          
-          {roomData.activePlayerId ? (
-            <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', zIndex: 1, width: '100%', justifyContent: 'center', flexWrap: 'wrap' }}>
-              <div style={{ width: '200px', height: '280px', borderRadius: '12px', background: 'rgba(0,0,0,0.5)', border: '2px solid var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Users size={64} color="var(--text-muted)" />
+        {/* Left Sidebar: Live Chat */}
+        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--glass-border)' }}>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)' }}>
+              <MessageCircle size={16} /> Live Chat
+            </h3>
+          </div>
+
+          <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {chatMessages.length === 0 ? <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center', marginTop: '2rem' }}>Be the first to hype up the chat!</p> : null}
+            {chatMessages.map(msg => (
+              <div key={msg.id} style={{ background: 'rgba(0,0,0,0.3)', padding: '10px', borderRadius: '8px' }}>
+                <span style={{ fontWeight: 'bold', color: msg.sender === viewerName ? 'var(--secondary)' : 'var(--primary)', fontSize: '0.8rem', display: 'block', marginBottom: '2px' }}>
+                  {msg.sender}
+                </span>
+                <p style={{ fontSize: '0.9rem', color: 'var(--text-main)', wordBreak: 'break-word' }}>{msg.text}</p>
               </div>
-              <div style={{ flex: 1, minWidth: '250px' }}>
-                <h1 style={{ fontSize: '3rem', lineHeight: '1.1', marginBottom: '1rem' }} className="text-gradient">
-                  Player on Block
-                </h1>
-                
-                <div style={{ background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: '8px', border: '1px solid #ff0080', marginBottom: '1rem' }}>
-                  <p style={{ color: '#ff0080', fontSize: '0.9rem', textTransform: 'uppercase' }}>Current Bid</p>
-                  <p style={{ fontSize: '2.5rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <Coins size={24} /> {roomData.currentBid || 0}
-                  </p>
-                  <p style={{ color: 'var(--text-main)', marginTop: '5px' }}>
-                    Highest Bidder: <strong style={{ color: 'var(--secondary)' }}>{roomData.highestBidder !== 'None' ? roomData.highestBidder : 'Waiting...'}</strong>
-                  </p>
-                </div>
+            ))}
+          </div>
+
+          <div style={{ padding: '1rem', borderTop: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.3)' }}>
+            <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: '10px' }}>
+              <input 
+                type="text"
+                className="premium-input"
+                placeholder="Send a message..."
+                value={newMessage}
+                onChange={e => setNewMessage(e.target.value)}
+                style={{ padding: '10px', fontSize: '0.9rem' }}
+              />
+              <button type="submit" className="btn-primary" style={{ padding: '0 15px' }} disabled={!newMessage.trim()}>
+                <Send size={16} />
+              </button>
+            </form>
+          </div>
+        </div>
+
+        {/* Center: Main Stage / Broadcast View */}
+        <div className="glass-panel" style={{ position: 'relative', overflow: 'hidden', padding: 0 }}>
+          
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '100%', background: 'radial-gradient(circle at 50% 0%, rgba(0, 255, 136, 0.1) 0%, transparent 70%)', zIndex: 0, pointerEvents: 'none' }} />
+          
+          {roomData.status === 'waiting' || roomData.status === 'break' ? (
+            <div className="animate-fade-in" style={{ zIndex: 1, width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem' }}>
+              <div style={{ background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: '50%', marginBottom: '1.5rem' }}>
+                {roomData.status === 'break' ? <Clock size={48} color="#ffd700" /> : <Users size={48} color="var(--primary)" />}
               </div>
+              
+              <h2 style={{ fontSize: '3rem', marginBottom: '1rem', letterSpacing: '-0.02em' }} className="text-gradient">
+                {roomData.status === 'break' ? 'Coffee Break' : 'Awaiting Owners'}
+              </h2>
+              <p style={{ color: 'var(--text-muted)', marginBottom: '3rem', fontSize: '1.1rem', maxWidth: '400px', textAlign: 'center' }}>
+                The broadcast will {roomData.status === 'break' ? 'resume' : 'begin'} once all franchises are ready. Grab some popcorn! 🍿
+              </p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--text-muted)' }}>
-              <h3 style={{ fontSize: '1.5rem', textAlign: 'center' }}>Waiting for action...</h3>
-              <p>The host is deciding the next move.</p>
+            <div style={{ padding: '3rem 2rem', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', zIndex: 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                <h2 style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.3em' }}>On The Block</h2>
+              </div>
+              
+              {activePlayer ? (
+                <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'center' }}>
+                  <div style={{ display: 'flex', gap: '3rem', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
+                    
+                    <div style={{ 
+                      width: '220px', height: '300px', borderRadius: '16px', background: 'linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.8) 100%)', 
+                      border: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      boxShadow: '0 20px 50px rgba(0,0,0,0.5)', position: 'relative'
+                    }}>
+                      <div style={{ position: 'absolute', top: '10px', left: '10px', background: 'rgba(0,0,0,0.6)', padding: '4px 10px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--primary)' }}>
+                        LOT #{activePlayer.id.substring(0,4)}
+                      </div>
+                      <Users size={80} color="rgba(255,255,255,0.1)" />
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: '300px' }}>
+                      {activePlayer.nickName && (
+                        <span style={{ fontSize: '1rem', color: 'var(--secondary)', textTransform: 'uppercase', letterSpacing: '0.2em', fontWeight: 'bold' }}>
+                          "{activePlayer.nickName}"
+                        </span>
+                      )}
+                      <h1 style={{ fontSize: '4rem', fontWeight: '900', lineHeight: '1', margin: '0.5rem 0 2rem 0', letterSpacing: '-0.02em' }} className="text-gradient">
+                        {activePlayer.realName}
+                      </h1>
+                      
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem' }}>
+                        
+                        <div style={{ background: 'rgba(0,0,0,0.4)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+                          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>Positions</p>
+                          <p style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text-main)' }}>{activePlayer.positions?.join(', ')}</p>
+                        </div>
+                        
+                        <div style={{ background: 'rgba(0,0,0,0.4)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+                          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>Village</p>
+                          <p style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text-main)' }}>{activePlayer.village}</p>
+                        </div>
+                        
+                        <div style={{ background: 'rgba(0,255,136,0.05)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(0,255,136,0.2)' }}>
+                          <p style={{ color: 'var(--primary)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>Base Price</p>
+                          <p style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <Coins size={16} color="var(--primary)" /> {activePlayer.basePrice || 500}
+                          </p>
+                        </div>
+
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1 }}>
+                  <AlertTriangle size={64} style={{ marginBottom: '1.5rem', opacity: 0.2, color: 'var(--text-muted)' }} />
+                  <h3 style={{ color: 'var(--text-muted)', fontWeight: '400', letterSpacing: '0.05em' }}>Awaiting Next Player...</h3>
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        {/* Right Sidebar: Live Chat */}
-        <div className="glass-panel" style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: '1rem', borderBottom: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.2)' }}>
-            <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Live Chat</h3>
-          </div>
+        {/* Right Sidebar: Bidding Stats */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           
-          <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {messages.length === 0 ? (
-              <p style={{ color: 'var(--text-muted)', textAlign: 'center', fontSize: '0.9rem', marginTop: 'auto', marginBottom: 'auto' }}>No messages yet. Be the first to hype it up!</p>
-            ) : null}
+          <div className="glass-panel" style={{ padding: '2rem', textAlign: 'center', background: 'linear-gradient(180deg, rgba(30,30,35,0.8) 0%, rgba(20,20,24,0.9) 100%)', position: 'relative' }}>
+            <p style={{ color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: '0.75rem', fontWeight: 'bold' }}>Current Bid</p>
             
-            {messages.map(msg => (
-              <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.sender === myNickname ? 'flex-end' : 'flex-start' }}>
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '2px', marginLeft: '5px', marginRight: '5px' }}>{msg.sender}</span>
-                <div style={{ 
-                  background: msg.sender === myNickname ? 'var(--primary)' : 'rgba(0,0,0,0.5)', 
-                  color: msg.sender === myNickname ? '#000' : 'var(--text-main)',
-                  padding: '8px 12px', 
-                  borderRadius: '12px',
-                  borderTopRightRadius: msg.sender === myNickname ? '0' : '12px',
-                  borderTopLeftRadius: msg.sender === myNickname ? '12px' : '0',
-                  maxWidth: '80%',
-                  wordBreak: 'break-word'
-                }}>
-                  {msg.text}
-                </div>
-              </div>
-            ))}
-            <div ref={chatEndRef} />
+            <h1 className={pulseBid ? 'pulse-gold' : ''} style={{ 
+              fontSize: '4rem', color: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', 
+              margin: '0.5rem 0', fontWeight: '900', letterSpacing: '-0.02em', transition: 'color 0.2s'
+            }}>
+              <Coins size={32} /> {roomData.currentBid || (activePlayer?.basePrice || 0)}
+            </h1>
+            
+            <div style={{ background: 'rgba(0,0,0,0.5)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', marginBottom: '1.5rem' }}>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Highest Bidder</p>
+              <strong style={{ color: roomData.highestBidder !== 'None' ? 'var(--primary)' : 'var(--text-muted)', fontSize: '1.1rem' }}>
+                {roomData.highestBidder || 'None'}
+              </strong>
+            </div>
+            
+            <div style={{ 
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', 
+              color: roomData.timeLeft <= 5 ? '#ff0044' : 'var(--text-main)', 
+              fontSize: '2rem', fontWeight: '900',
+              textShadow: roomData.timeLeft <= 5 ? '0 0 20px rgba(255,0,68,0.5)' : 'none'
+            }}>
+              <Clock size={28} /> 00:{roomData.timeLeft < 10 ? `0${roomData.timeLeft || 0}` : (roomData.timeLeft || 0)}
+            </div>
           </div>
 
-          <form onSubmit={handleSendMessage} style={{ padding: '1rem', borderTop: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.2)', display: 'flex', gap: '10px' }}>
-            <input 
-              type="text" 
-              className="premium-input" 
-              placeholder="Send a message..." 
-              value={chatInput}
-              onChange={e => setChatInput(e.target.value)}
-              style={{ flex: 1, padding: '10px', fontSize: '0.9rem', marginBottom: 0 }}
-            />
-            <button type="submit" className="btn-primary" style={{ padding: '10px', backgroundImage: 'linear-gradient(135deg, #ff0080, #ff8c00)' }} disabled={!chatInput.trim()}>
-              <Send size={18} />
-            </button>
-          </form>
+          <div className="glass-panel" style={{ padding: '1.5rem', flex: 1, overflowY: 'auto' }}>
+            <h3 style={{ marginBottom: '1.5rem', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)' }}>Franchise Wallets</h3>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {roomData.owners?.map((owner, index) => {
+                const spent = soldPlayers
+                  .filter(p => p.soldTo === owner.name)
+                  .reduce((sum, p) => sum + (p.soldPrice || 0), 0);
+                const remaining = roomData.budgetPerTeam - spent;
+                
+                return (
+                  <div key={index} className="list-item" style={{ borderLeft: '3px solid transparent' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <span style={{ fontWeight: 'bold', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {owner.name || `Team ${index + 1}`}
+                        </span>
+                    </div>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--secondary)', fontSize: '0.85rem', fontWeight: 'bold' }}>
+                      <Coins size={14} /> {remaining} <span style={{ color: 'var(--text-muted)', fontWeight: 'normal' }}>left</span>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            
+            {/* Reactions Bar */}
+            <div style={{ marginTop: 'auto', paddingTop: '2rem', display: 'flex', justifyContent: 'space-around' }}>
+               <button onClick={() => sendReaction('🔥')} style={{ background: 'transparent', border: 'none', fontSize: '1.5rem', cursor: 'pointer', transition: 'transform 0.1s' }} onMouseDown={e => e.currentTarget.style.transform='scale(0.8)'} onMouseUp={e => e.currentTarget.style.transform='scale(1)'}>🔥</button>
+               <button onClick={() => sendReaction('❤️')} style={{ background: 'transparent', border: 'none', fontSize: '1.5rem', cursor: 'pointer', transition: 'transform 0.1s' }} onMouseDown={e => e.currentTarget.style.transform='scale(0.8)'} onMouseUp={e => e.currentTarget.style.transform='scale(1)'}>❤️</button>
+               <button onClick={() => sendReaction('👍')} style={{ background: 'transparent', border: 'none', fontSize: '1.5rem', cursor: 'pointer', transition: 'transform 0.1s' }} onMouseDown={e => e.currentTarget.style.transform='scale(0.8)'} onMouseUp={e => e.currentTarget.style.transform='scale(1)'}>👍</button>
+               <button onClick={() => sendReaction('👎')} style={{ background: 'transparent', border: 'none', fontSize: '1.5rem', cursor: 'pointer', transition: 'transform 0.1s' }} onMouseDown={e => e.currentTarget.style.transform='scale(0.8)'} onMouseUp={e => e.currentTarget.style.transform='scale(1)'}>👎</button>
+            </div>
+          </div>
         </div>
-
       </div>
     </div>
   );
