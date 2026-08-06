@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Lock, Trophy, Users, Coins, Share2, Copy, CheckCircle2 } from 'lucide-react';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 
 export default function OwnerEntry() {
@@ -15,12 +15,15 @@ export default function OwnerEntry() {
   const [tournamentData, setTournamentData] = useState({
     name: '',
     numOwners: 4,
-    budget: 10000
+    budget: 10000,
+    hostTeamName: ''
   });
   
   const [roomCode, setRoomCode] = useState('');
   
   const [joinCode, setJoinCode] = useState('');
+  const [joinTeamName, setJoinTeamName] = useState('');
+  
   const [error, setError] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -34,18 +37,30 @@ export default function OwnerEntry() {
 
   const handleCreateTournament = async () => {
     setIsLoading(true);
-    // Generate a random 6 character code
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
     
     try {
+      const budgetNum = Number(tournamentData.budget);
+      // Host automatically becomes the first owner
+      const hostOwner = { name: tournamentData.hostTeamName, budget: budgetNum };
+
       await setDoc(doc(db, 'rooms', code), {
         name: tournamentData.name,
         numOwners: Number(tournamentData.numOwners),
-        budgetPerTeam: Number(tournamentData.budget),
-        status: 'waiting', // waiting, active, finished
+        budgetPerTeam: budgetNum,
+        status: 'waiting',
         createdAt: serverTimestamp(),
-        activePlayerId: null // used to show which player is currently on the block
+        activePlayerId: null,
+        currentBid: 0,
+        highestBidder: 'None',
+        timeLeft: 15,
+        owners: [hostOwner] // Array to track all joined owners
       });
+      
+      // Save identity locally
+      localStorage.setItem('pitchbid_team', tournamentData.hostTeamName);
+      localStorage.setItem('pitchbid_isHost', 'true');
+      
       setRoomCode(code);
       setMode('share');
     } catch (err) {
@@ -64,9 +79,9 @@ export default function OwnerEntry() {
   };
 
   const handleJoin = async () => {
-    if (joinCode.length < 4) {
+    if (joinCode.length < 4 || !joinTeamName) {
       setError(true);
-      setErrorMsg("Code too short");
+      setErrorMsg(joinTeamName ? "Code too short" : "Enter a Team Name");
       setTimeout(() => setError(false), 2000);
       return;
     }
@@ -77,6 +92,34 @@ export default function OwnerEntry() {
       const roomSnap = await getDoc(roomRef);
       
       if (roomSnap.exists()) {
+        const data = roomSnap.data();
+        
+        // Check if room is full
+        if (data.owners && data.owners.length >= data.numOwners) {
+          // Allow re-entry if this team name is already in the room
+          const isReturningOwner = data.owners.some(o => o.name === joinTeamName);
+          if (!isReturningOwner) {
+            setError(true);
+            setErrorMsg("Room is full! Max owners reached.");
+            setTimeout(() => setError(false), 3000);
+            setIsLoading(false);
+            return;
+          }
+        }
+        
+        // Add owner to room if they aren't already in it
+        const isReturningOwner = data.owners?.some(o => o.name === joinTeamName);
+        if (!isReturningOwner) {
+          const newOwnersList = [...(data.owners || []), { name: joinTeamName, budget: data.budgetPerTeam }];
+          await updateDoc(roomRef, {
+            owners: newOwnersList
+          });
+        }
+        
+        // Save identity
+        localStorage.setItem('pitchbid_team', joinTeamName);
+        localStorage.setItem('pitchbid_isHost', 'false');
+        
         navigate(`/auction?room=${joinCode}`);
       } else {
         setError(true);
@@ -126,6 +169,17 @@ export default function OwnerEntry() {
             />
           </div>
           
+          <div className="input-group">
+            <label>Your Team Name (Host)</label>
+            <input 
+              type="text" 
+              className="premium-input" 
+              placeholder="e.g. Spartans FC"
+              value={tournamentData.hostTeamName}
+              onChange={e => setTournamentData({...tournamentData, hostTeamName: e.target.value})}
+            />
+          </div>
+          
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
             <div className="input-group">
               <label>Number of Owners</label>
@@ -160,7 +214,7 @@ export default function OwnerEntry() {
             className="btn-primary" 
             style={{ width: '100%', marginTop: '1rem' }} 
             onClick={handleCreateTournament}
-            disabled={!tournamentData.name || isLoading}
+            disabled={!tournamentData.name || !tournamentData.hostTeamName || isLoading}
           >
             {isLoading ? "Generating..." : "Generate Room"}
           </button>
@@ -206,7 +260,19 @@ export default function OwnerEntry() {
           <h2 style={{ fontSize: '1.8rem', marginBottom: '0.5rem' }}>Join Tournament</h2>
           <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>Enter the room code provided by the host.</p>
           
+          <div className="input-group" style={{ textAlign: 'left', marginBottom: '1rem' }}>
+            <label>Your Team Name</label>
+            <input 
+              type="text" 
+              className="premium-input" 
+              placeholder="e.g. Velocity United"
+              value={joinTeamName}
+              onChange={e => setJoinTeamName(e.target.value)}
+            />
+          </div>
+
           <div className="input-group" style={{ textAlign: 'left' }}>
+            <label>Room Code</label>
             <input 
               type="text" 
               className="premium-input" 
@@ -214,7 +280,7 @@ export default function OwnerEntry() {
               value={joinCode}
               onChange={e => setJoinCode(e.target.value.toUpperCase())}
               style={{ 
-                fontSize: '2rem', 
+                fontSize: '1.5rem', 
                 letterSpacing: '0.3em', 
                 textAlign: 'center',
                 borderColor: error ? 'red' : 'var(--border-color)',
@@ -222,10 +288,10 @@ export default function OwnerEntry() {
               }}
               onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
             />
-            {error && <span style={{ color: 'red', fontSize: '0.9rem', marginTop: '0.5rem', textAlign: 'center' }}>{errorMsg}</span>}
+            {error && <span style={{ color: 'red', fontSize: '0.9rem', marginTop: '0.5rem', textAlign: 'center', display: 'block' }}>{errorMsg}</span>}
           </div>
           
-          <button className="btn-primary" style={{ width: '100%', marginTop: '1rem' }} onClick={handleJoin} disabled={!joinCode || isLoading}>
+          <button className="btn-primary" style={{ width: '100%', marginTop: '1rem' }} onClick={handleJoin} disabled={!joinCode || !joinTeamName || isLoading}>
             {isLoading ? "Unlocking..." : "Unlock Podium"}
           </button>
         </div>
