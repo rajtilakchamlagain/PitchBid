@@ -172,7 +172,7 @@ export default function AuctionRoom() {
     await updateDoc(doc(db, 'rooms', roomCode), updates);
   };
 
-  const handleBid = async () => {
+  const handleBid = async (customIncrement = null) => {
     if (!roomData || !activePlayer || roomData.status !== 'live') return;
     
     const mySpent = players
@@ -180,9 +180,10 @@ export default function AuctionRoom() {
       .reduce((sum, p) => sum + (p.soldPrice || 0), 0);
     const myRemaining = roomData.budgetPerTeam - mySpent;
 
-    const current = roomData.currentBid || activePlayer.basePrice || 500;
-    const increment = current >= 2000 ? 500 : 100;
-    const newBid = current + increment;
+    const current = roomData.currentBid || activePlayer.basePrice || 200;
+    const autoIncrement = current >= 1000 ? 100 : 50;
+    const incrementAmt = customIncrement || autoIncrement;
+    const newBid = current + incrementAmt;
     
     if (newBid > myRemaining) {
       alert("Insufficient funds!");
@@ -205,7 +206,7 @@ export default function AuctionRoom() {
     try {
       await updateDoc(doc(db, 'rooms', roomCode), {
         activePlayerId: playerId,
-        currentBid: p?.basePrice || 500,
+        currentBid: p?.basePrice || 200,
         highestBidder: 'None',
         timeLeft: 13
       });
@@ -358,8 +359,6 @@ export default function AuctionRoom() {
     );
   };
 
-  const currentIncrement = (roomData.currentBid || (activePlayer?.basePrice || 500)) >= 2000 ? 500 : 100;
-
   return (
     <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       {renderRoomInfoModal()}
@@ -482,7 +481,7 @@ export default function AuctionRoom() {
                     </p>
                   </div>
                   <span style={{ fontSize: '0.8rem', fontWeight: 'bold', background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: '4px' }}>
-                    ₹{p.basePrice || 500}
+                    ₹{p.basePrice || 200}
                   </span>
                 </div>
                 {isHost && roomData.status === 'live' && (
@@ -612,7 +611,7 @@ export default function AuctionRoom() {
                         <div style={{ background: 'rgba(0,255,136,0.05)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(0,255,136,0.2)' }}>
                           <p style={{ color: 'var(--primary)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>Base Price</p>
                           <p style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <Coins size={16} color="var(--primary)" /> {activePlayer.basePrice || 500}
+                            <Coins size={16} color="var(--primary)" /> {activePlayer.basePrice || 200}
                           </p>
                         </div>
 
@@ -660,14 +659,53 @@ export default function AuctionRoom() {
               <Clock size={28} /> 00:{roomData.timeLeft < 10 ? `0${roomData.timeLeft || 0}` : (roomData.timeLeft || 0)}
             </div>
 
-            <button 
-              className="btn-primary" 
-              style={{ width: '100%', padding: '1.2rem', fontSize: '1.2rem' }} 
-              onClick={handleBid} 
-              disabled={!activePlayer || roomData.status !== 'live'}
-            >
-              BID +{currentIncrement}
-            </button>
+            {(() => {
+              const currentPrice = roomData?.currentBid || activePlayer?.basePrice || 200;
+              const autoInc = currentPrice >= 1000 ? 100 : 50;
+              const tb = roomData?.budgetPerTeam || 10000;
+              const b1 = Math.max(10, Math.round((tb * 0.01) / 10) * 10);
+              const b2 = Math.max(10, Math.round((tb * 0.03) / 10) * 10);
+              const b3 = Math.max(10, Math.round((tb * 0.05) / 10) * 10);
+              
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <button 
+                    className="btn-primary" 
+                    style={{ width: '100%', padding: '1.2rem', fontSize: '1.2rem' }} 
+                    onClick={() => handleBid(null)} 
+                    disabled={!activePlayer || roomData?.status !== 'live'}
+                  >
+                    BID +{autoInc}
+                  </button>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                    <button 
+                      className="btn-outline" 
+                      style={{ padding: '0.8rem 0', fontSize: '0.9rem', borderColor: 'rgba(255,255,255,0.2)' }} 
+                      onClick={() => handleBid(b1)} 
+                      disabled={!activePlayer || roomData?.status !== 'live'}
+                    >
+                      +{b1} (1%)
+                    </button>
+                    <button 
+                      className="btn-outline" 
+                      style={{ padding: '0.8rem 0', fontSize: '0.9rem', borderColor: 'var(--primary)', color: 'var(--primary)' }} 
+                      onClick={() => handleBid(b2)} 
+                      disabled={!activePlayer || roomData?.status !== 'live'}
+                    >
+                      +{b2} (3%)
+                    </button>
+                    <button 
+                      className="btn-outline" 
+                      style={{ padding: '0.8rem 0', fontSize: '0.9rem', borderColor: '#ff0044', color: '#ff0044' }} 
+                      onClick={() => handleBid(b3)} 
+                      disabled={!activePlayer || roomData?.status !== 'live'}
+                    >
+                      +{b3} (5%)
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Wallets */}
