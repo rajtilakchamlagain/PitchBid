@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Coins, Clock, AlertTriangle, Users, Shuffle, CheckCircle2, Info, X, Edit2, Save, Pause, Play, Heart, ThumbsDown, ThumbsUp, Flame, List, ShieldCheck } from 'lucide-react';
-import { doc, getDoc, updateDoc, onSnapshot, collection, query, addDoc, serverTimestamp, orderBy, limit, where } from 'firebase/firestore';
+import { doc, getDoc, getDocs, updateDoc, onSnapshot, collection, query, addDoc, serverTimestamp, orderBy, limit, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import RostersModal from '../components/RostersModal';
 import OnboardingTour from '../components/OnboardingTour';
@@ -117,6 +117,26 @@ export default function AuctionRoom() {
              setShowSoldStamp(true);
              setTimeout(() => setShowSoldStamp(false), 2000);
           }
+
+          // Auto-Random Next Player after delay
+          if (isHost) {
+            setTimeout(async () => {
+              try {
+                const q = query(collection(db, 'rooms', roomCode, 'players'), where('status', '==', 'pending'));
+                const snap = await getDocs(q);
+                const pending = snap.docs.map(d => ({id: d.id, ...d.data()}));
+                if (pending.length > 0) {
+                  const rand = pending[Math.floor(Math.random() * pending.length)];
+                  await updateDoc(doc(db, 'rooms', roomCode), {
+                    activePlayerId: rand.id,
+                    currentBid: rand.basePrice || 200,
+                    highestBidder: 'None',
+                    timeLeft: 13
+                  });
+                }
+              } catch(e) { console.error("Auto next error", e); }
+            }, 3000); // 3 seconds delay for sold animation
+          }
         }
         setActivePlayer(null);
       }
@@ -184,9 +204,14 @@ export default function AuctionRoom() {
     const myRemaining = roomData.budgetPerTeam - mySpent;
 
     const current = roomData.currentBid || activePlayer.basePrice || 200;
-    const autoIncrement = current >= 1000 ? 100 : 50;
-    const incrementAmt = customIncrement || autoIncrement;
+    const dynamicIncrement = Math.max(50, Math.round((roomData.budgetPerTeam * 0.005) / 10) * 10);
+    const incrementAmt = customIncrement || dynamicIncrement;
     const newBid = current + incrementAmt;
+    
+    // Haptic feedback
+    if (window.navigator && window.navigator.vibrate) {
+      window.navigator.vibrate(50);
+    }
     
     if (newBid > myRemaining) {
       alert("Insufficient funds!");
@@ -665,17 +690,24 @@ export default function AuctionRoom() {
             </div>
 
             {(() => {
-              const currentPrice = roomData?.currentBid || activePlayer?.basePrice || 200;
-              const autoInc = currentPrice >= 1000 ? 100 : 50;
+              const dynamicIncrement = Math.max(50, Math.round((roomData?.budgetPerTeam * 0.005) / 10) * 10);
+              const isWinning = roomData?.highestBidder === myTeamName;
               
               return (
                 <button 
-                  className="btn-primary" 
-                  style={{ width: '100%', padding: '1.2rem', fontSize: '1.2rem' }} 
+                  className={isWinning ? "btn-outline" : "btn-primary"} 
+                  style={{ 
+                    width: '100%', padding: '1.2rem', fontSize: '1.2rem', 
+                    transition: 'transform 0.1s, background-color 0.3s',
+                    opacity: (!activePlayer || roomData?.status !== 'live') ? 0.5 : 1
+                  }} 
                   onClick={() => handleBid(null)} 
-                  disabled={!activePlayer || roomData?.status !== 'live'}
+                  onMouseDown={e => { if (!isWinning && activePlayer) e.currentTarget.style.transform = 'scale(0.95)' }}
+                  onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
+                  onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                  disabled={!activePlayer || roomData?.status !== 'live' || isWinning}
                 >
-                  BID +{autoInc}
+                  {isWinning ? "WINNING BID" : `BID +${dynamicIncrement}`}
                 </button>
               );
             })()}
