@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Coins, Clock, AlertTriangle, Users, Shuffle, CheckCircle2, Info, X, Edit2, Save, Pause, Play, Heart, ThumbsDown, ThumbsUp, Flame } from 'lucide-react';
+import { ArrowLeft, Coins, Clock, AlertTriangle, Users, Shuffle, CheckCircle2, Info, X, Edit2, Save, Pause, Play, Heart, ThumbsDown, ThumbsUp, Flame, List, ShieldCheck } from 'lucide-react';
 import { doc, getDoc, updateDoc, onSnapshot, collection, query, addDoc, serverTimestamp, orderBy, limit, where } from 'firebase/firestore';
 import { db } from '../firebase';
+import RostersModal from '../components/RostersModal';
 
 export default function AuctionRoom() {
   const navigate = useNavigate();
@@ -13,6 +14,7 @@ export default function AuctionRoom() {
   const [players, setPlayers] = useState([]);
   const [activePlayer, setActivePlayer] = useState(null);
   const [showRoomInfo, setShowRoomInfo] = useState(false);
+  const [isRostersOpen, setIsRostersOpen] = useState(false);
 
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState('');
@@ -361,6 +363,7 @@ export default function AuctionRoom() {
   return (
     <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       {renderRoomInfoModal()}
+      <RostersModal isOpen={isRostersOpen} onClose={() => setIsRostersOpen(false)} roomData={roomData} players={players} />
       
       {/* Reactions Layer */}
       {reactions.map(r => (
@@ -388,6 +391,22 @@ export default function AuctionRoom() {
         </div>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          
+          <button 
+            className="btn-outline"
+            onClick={() => navigate(`/squad-builder?room=${roomCode}`)}
+            style={{ padding: '8px 16px', display: 'flex', gap: '8px', alignItems: 'center', background: 'rgba(255, 0, 128, 0.1)', borderColor: '#ff0080', color: '#ff0080' }}
+          >
+            <ShieldCheck size={14} /> Tactics
+          </button>
+
+          <button 
+            className="btn-outline"
+            onClick={() => setIsRostersOpen(true)}
+            style={{ padding: '8px 16px', display: 'flex', gap: '8px', alignItems: 'center', background: 'rgba(0, 229, 255, 0.1)', borderColor: 'var(--secondary)', color: 'var(--text-main)' }}
+          >
+            <List size={14} /> View Squads
+          </button>
           
           {roomData.status === 'live' && (
             <button 

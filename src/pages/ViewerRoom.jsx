@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Coins, Clock, AlertTriangle, Users, MessageCircle, Send } from 'lucide-react';
+import { ArrowLeft, Coins, Clock, AlertTriangle, Users, MessageCircle, Send, List } from 'lucide-react';
 import { doc, onSnapshot, collection, query, orderBy, addDoc, serverTimestamp, limit } from 'firebase/firestore';
 import { db } from '../firebase';
+import RostersModal from '../components/RostersModal';
 
 export default function ViewerRoom() {
   const navigate = useNavigate();
@@ -16,6 +17,7 @@ export default function ViewerRoom() {
   const [chatMessages, setChatMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [reactions, setReactions] = useState([]);
+  const [isRostersOpen, setIsRostersOpen] = useState(false);
 
   const viewerName = localStorage.getItem('pitchbid_viewer') || 'Anonymous Fan';
 
@@ -139,6 +141,8 @@ export default function ViewerRoom() {
   return (
     <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       
+      <RostersModal isOpen={isRostersOpen} onClose={() => setIsRostersOpen(false)} roomData={roomData} players={players} />
+
       {/* Reactions Layer */}
       {reactions.map(r => (
         <div key={r.id} className="float-emoji" style={{ left: `${r.x}%` }}>{r.emoji}</div>
@@ -165,6 +169,15 @@ export default function ViewerRoom() {
         </div>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          
+          <button 
+            className="btn-outline"
+            onClick={() => setIsRostersOpen(true)}
+            style={{ padding: '8px 16px', display: 'flex', gap: '8px', alignItems: 'center', background: 'rgba(0, 229, 255, 0.1)', borderColor: 'var(--secondary)', color: 'var(--text-main)' }}
+          >
+            <List size={14} /> View Squads
+          </button>
+
           <div style={{ 
             background: roomData.status === 'live' ? 'rgba(255, 0, 68, 0.15)' : roomData.status === 'break' ? 'rgba(255, 215, 0, 0.15)' : 'rgba(0, 212, 255, 0.15)', 
             padding: '8px 16px', 
