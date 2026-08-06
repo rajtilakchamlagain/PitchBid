@@ -24,31 +24,11 @@ Currently optimized for **Football** drafts, PitchBid allows players to register
 
 ---
 
-## 🛠️ Getting Started
+## 🚀 Getting Started
 
-### Prerequisites
+The platform is fully hosted and accessible online. There is no need to clone or install anything locally!
 
-Ensure you have [Node.js](https://nodejs.org/) installed on your machine.
-
-### Installation
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/rajtilakchamlagain/PitchBid.git
-   cd PitchBid
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Start the development server:
-   ```bash
-   npm run dev
-   ```
-
-4. Open your browser and navigate to `http://localhost:5173`.
+**Play Now:** 👉 [pitch-bid.vercel.app](https://pitch-bid.vercel.app)
 
 ---
 
