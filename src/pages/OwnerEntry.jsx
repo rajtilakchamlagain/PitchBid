@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Lock, Trophy, Users, Coins, Copy, CheckCircle2 } from 'lucide-react';
-import { doc, setDoc, getDocs, updateDoc, serverTimestamp, collection, query, where } from 'firebase/firestore';
+import { doc, setDoc, getDocs, updateDoc, serverTimestamp, collection, query, where, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
 export default function OwnerEntry() {
@@ -20,29 +20,60 @@ export default function OwnerEntry() {
   });
   
   const [generatedCodes, setGeneratedCodes] = useState({ owner: '', player: '', viewer: '' });
+  const [generatedOwners, setGeneratedOwners] = useState([]);
   
   const [joinCode, setJoinCode] = useState('');
-  const [joinTeamName, setJoinTeamName] = useState('');
+  const [joinPass, setJoinPass] = useState('');
+  
+  const [claimTeamName, setClaimTeamName] = useState('');
+  const [validRoomId, setValidRoomId] = useState('');
   
   const [error, setError] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // A quick one-time migration hook to fix PF52HZ (requested by user)
+  // PF52HZ Migration
   useEffect(() => {
     const runMigration = async () => {
       try {
         const roomRef = doc(db, 'rooms', 'PF52HZ');
-        const snap = await getDocs(query(collection(db, 'rooms'), where('ownerCode', '==', 'PF52HZ')));
-        if (snap.empty) {
-          // If we haven't migrated PF52HZ yet, do it
-          const randPlayer = Math.random().toString(36).substring(2, 8).toUpperCase();
-          const randViewer = Math.random().toString(36).substring(2, 8).toUpperCase();
-          await updateDoc(roomRef, {
-            ownerCode: 'PF52HZ',
-            playerCode: randPlayer,
-            viewerCode: randViewer,
-            status: 'waiting'
-          }).catch(e => console.log('Migration skip: ', e)); // ignore if doesn't exist
+        const snap = await getDoc(roomRef);
+        if (snap.exists()) {
+          const data = snap.data();
+          const updates = {};
+          
+          if (!data.playerCode) {
+            updates.ownerCode = 'PF52HZ';
+            updates.playerCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+            updates.viewerCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+            updates.status = data.status || 'waiting';
+          }
+
+          // Migrate passwords if not present
+          if (data.owners && data.owners.length > 0 && !data.owners[0].pass) {
+            let newOwners = [...data.owners];
+            
+            // Give existing owners a password
+            newOwners = newOwners.map(o => ({
+              ...o,
+              pass: o.pass || Math.floor(100000 + Math.random() * 900000).toString()
+            }));
+            
+            // Generate empty slots up to numOwners
+            const numOwners = data.numOwners || 4;
+            while (newOwners.length < numOwners) {
+              newOwners.push({
+                name: null,
+                budget: data.budgetPerTeam || 10000,
+                isReady: false,
+                pass: Math.floor(100000 + Math.random() * 900000).toString()
+              });
+            }
+            updates.owners = newOwners;
+          }
+          
+          if (Object.keys(updates).length > 0) {
+            await updateDoc(roomRef, updates);
+          }
         }
       } catch(e) { }
     };
@@ -65,11 +96,31 @@ export default function OwnerEntry() {
     
     try {
       const budgetNum = Number(tournamentData.budget);
-      const hostOwner = { name: tournamentData.hostTeamName, budget: budgetNum, isReady: false };
+      const numOwners = Number(tournamentData.numOwners);
+      
+      const ownersList = [];
+      
+      // Host Slot
+      ownersList.push({
+        name: tournamentData.hostTeamName,
+        budget: budgetNum,
+        isReady: false,
+        pass: Math.floor(100000 + Math.random() * 900000).toString()
+      });
+      
+      // Empty Slots
+      for (let i = 1; i < numOwners; i++) {
+        ownersList.push({
+          name: null, // Unclaimed
+          budget: budgetNum,
+          isReady: false,
+          pass: Math.floor(100000 + Math.random() * 900000).toString()
+        });
+      }
 
       await setDoc(doc(db, 'rooms', ownerCode), {
         name: tournamentData.name,
-        numOwners: Number(tournamentData.numOwners),
+        numOwners,
         budgetPerTeam: budgetNum,
         status: 'waiting',
         createdAt: serverTimestamp(),
@@ -80,13 +131,14 @@ export default function OwnerEntry() {
         ownerCode,
         playerCode,
         viewerCode,
-        owners: [hostOwner]
+        owners: ownersList
       });
       
       localStorage.setItem('pitchbid_team', tournamentData.hostTeamName);
       localStorage.setItem('pitchbid_isHost', 'true');
       
       setGeneratedCodes({ owner: ownerCode, player: playerCode, viewer: viewerCode });
+      setGeneratedOwners(ownersList);
       setMode('share');
     } catch (err) {
       console.error(err);
@@ -102,10 +154,10 @@ export default function OwnerEntry() {
     setTimeout(() => setCopiedCode(''), 2000);
   };
 
-  const handleJoin = async () => {
-    if (joinCode.length < 4 || !joinTeamName) {
+  const handleLogin = async () => {
+    if (joinCode.length < 4 || joinPass.length < 4) {
       setError(true);
-      setErrorMsg(joinTeamName ? "Code too short" : "Enter a Team Name");
+      setErrorMsg("Enter valid code and password");
       setTimeout(() => setError(false), 2000);
       return;
     }
@@ -119,29 +171,26 @@ export default function OwnerEntry() {
         const roomDoc = snap.docs[0];
         const data = roomDoc.data();
         
-        if (data.owners && data.owners.length >= data.numOwners) {
-          const isReturningOwner = data.owners.some(o => o.name === joinTeamName);
-          if (!isReturningOwner) {
-            setError(true);
-            setErrorMsg("Room is full! Max owners reached.");
-            setTimeout(() => setError(false), 3000);
-            setIsLoading(false);
-            return;
+        // Find slot by password
+        const slotIndex = data.owners?.findIndex(o => o.pass === joinPass);
+        
+        if (slotIndex !== -1) {
+          const slot = data.owners[slotIndex];
+          if (slot.name) {
+            // Log in as existing team
+            localStorage.setItem('pitchbid_team', slot.name);
+            localStorage.setItem('pitchbid_isHost', slotIndex === 0 ? 'true' : 'false');
+            navigate(`/auction?room=${roomDoc.id}`);
+          } else {
+            // Empty slot, prompt to claim
+            setValidRoomId(roomDoc.id);
+            setMode('claim');
           }
+        } else {
+          setError(true);
+          setErrorMsg("Invalid Password for this Tournament");
+          setTimeout(() => setError(false), 3000);
         }
-        
-        const isReturningOwner = data.owners?.some(o => o.name === joinTeamName);
-        if (!isReturningOwner) {
-          const newOwnersList = [...(data.owners || []), { name: joinTeamName, budget: data.budgetPerTeam, isReady: false }];
-          await updateDoc(doc(db, 'rooms', roomDoc.id), {
-            owners: newOwnersList
-          });
-        }
-        
-        localStorage.setItem('pitchbid_team', joinTeamName);
-        localStorage.setItem('pitchbid_isHost', 'false');
-        
-        navigate(`/auction?room=${roomDoc.id}`);
       } else {
         setError(true);
         setErrorMsg("Tournament not found");
@@ -157,6 +206,32 @@ export default function OwnerEntry() {
     }
   };
 
+  const handleClaimSlot = async () => {
+    if (!claimTeamName) return;
+    setIsLoading(true);
+    try {
+      const roomRef = doc(db, 'rooms', validRoomId);
+      const snap = await getDoc(roomRef);
+      const data = snap.data();
+      
+      const newOwners = [...data.owners];
+      const slotIndex = newOwners.findIndex(o => o.pass === joinPass);
+      
+      newOwners[slotIndex].name = claimTeamName;
+      
+      await updateDoc(roomRef, { owners: newOwners });
+      
+      localStorage.setItem('pitchbid_team', claimTeamName);
+      localStorage.setItem('pitchbid_isHost', slotIndex === 0 ? 'true' : 'false');
+      
+      navigate(`/auction?room=${validRoomId}`);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const renderContent = () => {
     if (mode === 'select') {
       return (
@@ -167,7 +242,7 @@ export default function OwnerEntry() {
               <Trophy size={20} /> Host a New Tournament
             </button>
             <button className="btn-outline" onClick={() => setMode('join')} style={{ padding: '1rem' }}>
-              <Lock size={20} /> Join Existing Tournament
+              <Lock size={20} /> Log In to Tournament
             </button>
           </div>
         </div>
@@ -237,7 +312,7 @@ export default function OwnerEntry() {
             onClick={handleCreateTournament}
             disabled={!tournamentData.name || !tournamentData.hostTeamName || isLoading}
           >
-            {isLoading ? "Generating..." : "Generate Codes"}
+            {isLoading ? "Generating..." : "Generate Tournament"}
           </button>
         </div>
       );
@@ -251,39 +326,35 @@ export default function OwnerEntry() {
               <CheckCircle2 size={32} color="var(--primary)" />
             </div>
             <h2 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>Tournament Created!</h2>
-            <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>Share these specific codes.</p>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>Share these details securely.</p>
           </div>
           
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '1.5rem', maxHeight: '40vh', overflowY: 'auto' }}>
             {/* Owner Code */}
-            <div style={{ background: 'rgba(0,212,255,0.1)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>For Partner Owners</p>
-                <h3 style={{ fontSize: '1.5rem', letterSpacing: '0.1em', color: 'var(--secondary)', margin: 0 }}>{generatedCodes.owner}</h3>
-              </div>
-              <button className="btn-outline" style={{ padding: '8px' }} onClick={() => handleCopy(generatedCodes.owner, 'owner')}>
-                {copiedCode === 'owner' ? <CheckCircle2 size={16} /> : <Copy size={16} />}
-              </button>
+            <div style={{ background: 'rgba(0,212,255,0.1)', padding: '10px', borderRadius: '8px', border: '1px solid var(--secondary)' }}>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>For Partner Owners</p>
+              <h3 style={{ fontSize: '1.5rem', letterSpacing: '0.1em', color: 'var(--secondary)', margin: 0 }}>{generatedCodes.owner}</h3>
             </div>
-            {/* Player Code */}
-            <div style={{ background: 'rgba(0,255,136,0.1)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--primary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>For Players (Registration)</p>
-                <h3 style={{ fontSize: '1.5rem', letterSpacing: '0.1em', color: 'var(--primary)', margin: 0 }}>{generatedCodes.player}</h3>
+            {/* Passwords */}
+            <div style={{ background: 'rgba(0,0,0,0.3)', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '5px' }}>Owner Passwords (Distribute 1 per team)</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
+                {generatedOwners.map((o, idx) => (
+                  <div key={idx} style={{ padding: '5px', background: 'rgba(0,0,0,0.5)', borderRadius: '4px', fontSize: '0.9rem' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Slot {idx + 1}:</span> <strong style={{ color: 'var(--text-main)' }}>{o.pass}</strong> {o.name && `(${o.name})`}
+                  </div>
+                ))}
               </div>
-              <button className="btn-outline" style={{ padding: '8px' }} onClick={() => handleCopy(generatedCodes.player, 'player')}>
-                {copiedCode === 'player' ? <CheckCircle2 size={16} /> : <Copy size={16} />}
-              </button>
             </div>
-            {/* Viewer Code */}
-            <div style={{ background: 'rgba(255,0,128,0.1)', padding: '1rem', borderRadius: '8px', border: '1px solid #ff0080', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>For Live Viewers</p>
-                <h3 style={{ fontSize: '1.5rem', letterSpacing: '0.1em', color: '#ff0080', margin: 0 }}>{generatedCodes.viewer}</h3>
-              </div>
-              <button className="btn-outline" style={{ padding: '8px' }} onClick={() => handleCopy(generatedCodes.viewer, 'viewer')}>
-                {copiedCode === 'viewer' ? <CheckCircle2 size={16} /> : <Copy size={16} />}
-              </button>
+
+            {/* Other Codes */}
+            <div style={{ background: 'rgba(0,255,136,0.1)', padding: '10px', borderRadius: '8px', border: '1px solid var(--primary)' }}>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>For Players (Registration)</p>
+              <h3 style={{ fontSize: '1.2rem', letterSpacing: '0.1em', color: 'var(--primary)', margin: 0 }}>{generatedCodes.player}</h3>
+            </div>
+            <div style={{ background: 'rgba(255,0,128,0.1)', padding: '10px', borderRadius: '8px', border: '1px solid #ff0080' }}>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>For Live Viewers</p>
+              <h3 style={{ fontSize: '1.2rem', letterSpacing: '0.1em', color: '#ff0080', margin: 0 }}>{generatedCodes.viewer}</h3>
             </div>
           </div>
 
@@ -301,21 +372,10 @@ export default function OwnerEntry() {
             <Lock size={40} color="var(--secondary)" />
           </div>
           
-          <h2 style={{ fontSize: '1.8rem', marginBottom: '0.5rem' }}>Join Tournament</h2>
-          <p style={{ color: 'var(--text-muted)', marginBottom: '2rem', fontSize: '0.9rem' }}>Enter the Owner code provided by the host.</p>
+          <h2 style={{ fontSize: '1.8rem', marginBottom: '0.5rem' }}>Owner Login</h2>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '2rem', fontSize: '0.9rem' }}>Enter the Owner code and your slot password.</p>
           
           <div className="input-group" style={{ textAlign: 'left', marginBottom: '1rem' }}>
-            <label>Your Team Name</label>
-            <input 
-              type="text" 
-              className="premium-input" 
-              placeholder="e.g. Velocity United"
-              value={joinTeamName}
-              onChange={e => setJoinTeamName(e.target.value)}
-            />
-          </div>
-
-          <div className="input-group" style={{ textAlign: 'left' }}>
             <label>Owner Code</label>
             <input 
               type="text" 
@@ -323,20 +383,55 @@ export default function OwnerEntry() {
               placeholder="OWNER CODE"
               value={joinCode}
               onChange={e => setJoinCode(e.target.value.toUpperCase())}
-              style={{ 
-                fontSize: '1.5rem', 
-                letterSpacing: '0.3em', 
-                textAlign: 'center',
-                borderColor: error ? 'red' : 'var(--border-color)',
-                textTransform: 'uppercase'
-              }}
-              onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
+              style={{ textTransform: 'uppercase' }}
+            />
+          </div>
+
+          <div className="input-group" style={{ textAlign: 'left' }}>
+            <label>Slot Password</label>
+            <input 
+              type="text" 
+              className="premium-input" 
+              placeholder="123456"
+              value={joinPass}
+              onChange={e => setJoinPass(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+              style={{ borderColor: error ? 'red' : 'var(--border-color)' }}
             />
             {error && <span style={{ color: 'red', fontSize: '0.8rem', marginTop: '0.5rem', textAlign: 'center', display: 'block' }}>{errorMsg}</span>}
           </div>
           
-          <button className="btn-primary" style={{ width: '100%', marginTop: '1rem' }} onClick={handleJoin} disabled={!joinCode || !joinTeamName || isLoading}>
-            {isLoading ? "Unlocking..." : "Unlock Podium"}
+          <button className="btn-primary" style={{ width: '100%', marginTop: '1rem' }} onClick={handleLogin} disabled={!joinCode || !joinPass || isLoading}>
+            {isLoading ? "Authenticating..." : "Log In"}
+          </button>
+        </div>
+      );
+    }
+
+    if (mode === 'claim') {
+      return (
+        <div className="animate-fade-in delay-100">
+          <div style={{ background: 'rgba(0, 255, 136, 0.1)', padding: '1.5rem', borderRadius: '50%', display: 'inline-block', marginBottom: '1.5rem' }}>
+            <Users size={40} color="var(--primary)" />
+          </div>
+          
+          <h2 style={{ fontSize: '1.8rem', marginBottom: '0.5rem' }}>Claim Your Slot</h2>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '2rem', fontSize: '0.9rem' }}>You've unlocked an empty slot. Name your team!</p>
+          
+          <div className="input-group" style={{ textAlign: 'left', marginBottom: '1rem' }}>
+            <label>Team Name</label>
+            <input 
+              type="text" 
+              className="premium-input" 
+              placeholder="e.g. Velocity United"
+              value={claimTeamName}
+              onChange={e => setClaimTeamName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleClaimSlot()}
+            />
+          </div>
+          
+          <button className="btn-primary" style={{ width: '100%', marginTop: '1rem' }} onClick={handleClaimSlot} disabled={!claimTeamName || isLoading}>
+            {isLoading ? "Claiming..." : "Enter Podium"}
           </button>
         </div>
       );
@@ -351,6 +446,7 @@ export default function OwnerEntry() {
           style={{ position: 'absolute', top: '1.5rem', left: '1.5rem', padding: '6px 12px', fontSize: '0.8rem', border: 'none' }}
           onClick={() => {
             if (mode === 'select') navigate('/');
+            else if (mode === 'claim') setMode('join');
             else setMode('select');
           }}
         >

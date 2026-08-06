@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Coins, Clock, AlertTriangle, Users, Shuffle, CheckCircle2 } from 'lucide-react';
-import { doc, getDoc, updateDoc, onSnapshot, collection, query, serverTimestamp } from 'firebase/firestore';
+import { ArrowLeft, Coins, Clock, AlertTriangle, Users, Shuffle, CheckCircle2, Info, X } from 'lucide-react';
+import { doc, getDoc, updateDoc, onSnapshot, collection, query } from 'firebase/firestore';
 import { db } from '../firebase';
 
 export default function AuctionRoom() {
@@ -12,8 +12,7 @@ export default function AuctionRoom() {
   const [roomData, setRoomData] = useState(null);
   const [players, setPlayers] = useState([]);
   const [activePlayer, setActivePlayer] = useState(null);
-  
-  const [localTimeLeft, setLocalTimeLeft] = useState(13); // 13 seconds standard
+  const [showRoomInfo, setShowRoomInfo] = useState(false);
 
   const myTeamName = localStorage.getItem('pitchbid_team');
   const isHost = localStorage.getItem('pitchbid_isHost') === 'true';
@@ -44,9 +43,7 @@ export default function AuctionRoom() {
       const p = [];
       snapshot.forEach(d => p.push({ id: d.id, ...d.data() }));
       setPlayers(p);
-      
-      // We need to re-eval active player if roomData already loaded but players array was empty
-      roomRef.id; // hack to keep scope clean
+      roomRef.id;
     });
 
     return () => {
@@ -59,21 +56,12 @@ export default function AuctionRoom() {
   useEffect(() => {
     if (!isHost || !roomData || !roomData.activePlayerId || roomData.status !== 'live') return;
 
-    let timer;
-    if (roomData.timerEnd) {
-      // Calculate remaining time based on server timestamp (roughly)
-      // Since Firestore doesn't provide easy client-side exact sync for timerEnd directly from a write,
-      // we just rely on local intervals after a bid is placed.
-    }
-    
-    // For simplicity, Host controls the countdown and pushes every 1 second
-    timer = setInterval(() => {
+    const timer = setInterval(() => {
       if (roomData.timeLeft > 0) {
         updateDoc(doc(db, 'rooms', roomCode), {
           timeLeft: roomData.timeLeft - 1
-        }).catch(e => {}); // ignore minor sync errors
+        }).catch(e => {}); 
       } else if (roomData.timeLeft === 0) {
-        // Timer hit 0, Auto Sell or Unsold
         clearInterval(timer);
         if (roomData.highestBidder === 'None') {
           handleMarkUnsold();
@@ -86,8 +74,6 @@ export default function AuctionRoom() {
     return () => clearInterval(timer);
   }, [isHost, roomData?.timeLeft, roomData?.activePlayerId, roomData?.status]);
 
-
-  // When active player is set, re-bind it immediately to avoid null errors
   useEffect(() => {
     if (roomData && roomData.activePlayerId) {
       const ap = players.find(p => p.id === roomData.activePlayerId);
@@ -97,8 +83,6 @@ export default function AuctionRoom() {
     }
   }, [roomData?.activePlayerId, players]);
 
-
-  // Owner Actions
   const handleReady = async () => {
     if (!roomData) return;
     const updatedOwners = roomData.owners.map(o => {
@@ -133,7 +117,7 @@ export default function AuctionRoom() {
       await updateDoc(doc(db, 'rooms', roomCode), {
         currentBid: newBid,
         highestBidder: myTeamName,
-        timeLeft: 13 // Reset timer on bid
+        timeLeft: 13
       });
     } catch (err) {
       console.error("Error bidding", err);
@@ -145,7 +129,7 @@ export default function AuctionRoom() {
     try {
       await updateDoc(doc(db, 'rooms', roomCode), {
         activePlayerId: playerId,
-        currentBid: p?.basePrice || 500, // Starts at base price
+        currentBid: p?.basePrice || 500,
         highestBidder: 'None',
         timeLeft: 13
       });
@@ -200,15 +184,13 @@ export default function AuctionRoom() {
     const unsoldPlayers = players.filter(p => p.status === 'unsold');
     if (unsoldPlayers.length === 0) return;
 
-    // Reset all unsold to pending and half their price
     for (const p of unsoldPlayers) {
       await updateDoc(doc(db, 'rooms', roomCode, 'players', p.id), {
         status: 'pending',
-        basePrice: Math.max(100, Math.floor((p.basePrice || 500) / 2)) // don't go below 100
+        basePrice: Math.max(100, Math.floor((p.basePrice || 500) / 2))
       });
     }
 
-    // Set all owners to unready and back to waiting
     const unreadyOwners = roomData.owners.map(o => ({ ...o, isReady: false }));
     await updateDoc(doc(db, 'rooms', roomCode), {
       status: 'waiting',
@@ -226,25 +208,83 @@ export default function AuctionRoom() {
   const isMyReady = me?.isReady;
   const allOwnersReady = roomData.owners?.every(o => o.isReady) && roomData.owners?.length === roomData.numOwners;
 
+  // ROOM INFO MODAL (For Host)
+  const renderRoomInfoModal = () => {
+    if (!showRoomInfo) return null;
+    return (
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+        <div className="glass-panel" style={{ width: '100%', maxWidth: '500px', padding: '2rem', position: 'relative' }}>
+          <button onClick={() => setShowRoomInfo(false)} style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'transparent', border: 'none', color: 'var(--text-main)', cursor: 'pointer' }}>
+            <X size={24} />
+          </button>
+          
+          <h2 style={{ fontSize: '1.5rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.5rem' }}>Room Info & Passwords</h2>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
+            <div style={{ background: 'rgba(0,212,255,0.1)', padding: '10px', borderRadius: '8px', border: '1px solid var(--secondary)' }}>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Owner Code</p>
+              <h3 style={{ fontSize: '1.5rem', color: 'var(--secondary)', margin: 0 }}>{roomData.ownerCode}</h3>
+            </div>
+
+            <div style={{ background: 'rgba(0,0,0,0.5)', padding: '15px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+              <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '10px' }}>Owner Slot Passwords</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                {roomData.owners?.map((o, idx) => (
+                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px', background: 'rgba(0,0,0,0.3)', borderRadius: '4px' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Slot {idx + 1} {o.name ? `(${o.name})` : '(Empty)'}</span>
+                    <strong style={{ color: 'var(--text-main)' }}>{o.pass}</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div style={{ background: 'rgba(0,255,136,0.1)', padding: '10px', borderRadius: '8px', border: '1px solid var(--primary)' }}>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Player Code</p>
+                <h3 style={{ fontSize: '1.2rem', color: 'var(--primary)', margin: 0 }}>{roomData.playerCode}</h3>
+              </div>
+              <div style={{ background: 'rgba(255,0,128,0.1)', padding: '10px', borderRadius: '8px', border: '1px solid #ff0080' }}>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Viewer Code</p>
+                <h3 style={{ fontSize: '1.2rem', color: '#ff0080', margin: 0 }}>{roomData.viewerCode}</h3>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // LOBBY VIEW
   if (roomData.status === 'waiting') {
     return (
       <div className="min-h-screen flex-center container">
-        <div className="glass-panel" style={{ width: '100%', maxWidth: '600px', padding: '3rem', textAlign: 'center' }}>
+        {renderRoomInfoModal()}
+        <div className="glass-panel" style={{ width: '100%', maxWidth: '600px', padding: '3rem', textAlign: 'center', position: 'relative' }}>
+          
+          {isHost && (
+            <button 
+              className="btn-outline" 
+              onClick={() => setShowRoomInfo(true)}
+              style={{ position: 'absolute', top: '1rem', right: '1rem', padding: '8px 12px', display: 'flex', gap: '5px', alignItems: 'center' }}
+            >
+              <Info size={16} /> Room Info
+            </button>
+          )}
+
           <h2 style={{ fontSize: '2rem', marginBottom: '1rem' }} className="text-gradient">Pre-Auction Lobby</h2>
           <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>Waiting for all owners to join and ready up.</p>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '2rem' }}>
             {roomData.owners?.map((o, idx) => (
               <div key={idx} style={{ background: 'rgba(0,0,0,0.3)', padding: '15px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 'bold' }}>{o.name} {o.name === myTeamName && '(You)'}</span>
-                {o.isReady ? <span style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '5px' }}><CheckCircle2 size={16} /> Ready</span> : <span style={{ color: 'var(--text-muted)' }}>Waiting...</span>}
-              </div>
-            ))}
-            {/* Empty Slots */}
-            {Array.from({ length: Math.max(0, roomData.numOwners - (roomData.owners?.length || 0)) }).map((_, i) => (
-              <div key={`empty-${i}`} style={{ background: 'transparent', border: '1px dashed var(--glass-border)', padding: '15px', borderRadius: '8px', color: 'var(--text-muted)' }}>
-                Waiting for owner...
+                {o.name ? (
+                  <>
+                    <span style={{ fontWeight: 'bold' }}>{o.name} {o.name === myTeamName && '(You)'}</span>
+                    {o.isReady ? <span style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '5px' }}><CheckCircle2 size={16} /> Ready</span> : <span style={{ color: 'var(--text-muted)' }}>Waiting...</span>}
+                  </>
+                ) : (
+                  <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Empty Slot (Slot {idx + 1})</span>
+                )}
               </div>
             ))}
           </div>
@@ -271,6 +311,8 @@ export default function AuctionRoom() {
 
   return (
     <div className="min-h-screen" style={{ padding: '1rem', display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      {renderRoomInfoModal()}
+      
       {/* Header */}
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexShrink: 0, flexWrap: 'wrap', gap: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -280,17 +322,21 @@ export default function AuctionRoom() {
           <span style={{ fontSize: '1rem', fontWeight: 'bold' }}>Team: <span className="text-gradient">{myTeamName}</span> {isHost && '(Host)'}</span>
         </div>
         
-        {isHost && roomData.ownerCode && (
-          <div style={{ display: 'flex', gap: '10px', fontSize: '0.8rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
-            <span style={{ padding: '4px 8px', background: 'rgba(0,0,0,0.3)', borderRadius: '4px' }}>Owner: <strong style={{ color: 'var(--secondary)' }}>{roomData.ownerCode}</strong></span>
-            <span style={{ padding: '4px 8px', background: 'rgba(0,0,0,0.3)', borderRadius: '4px' }}>Player: <strong style={{ color: 'var(--primary)' }}>{roomData.playerCode}</strong></span>
-            <span style={{ padding: '4px 8px', background: 'rgba(0,0,0,0.3)', borderRadius: '4px' }}>Viewer: <strong style={{ color: '#ff0080' }}>{roomData.viewerCode}</strong></span>
-          </div>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {isHost && (
+            <button 
+              className="btn-outline" 
+              onClick={() => setShowRoomInfo(true)}
+              style={{ padding: '6px 12px', display: 'flex', gap: '5px', alignItems: 'center', fontSize: '0.8rem' }}
+            >
+              <Info size={14} /> Room Info
+            </button>
+          )}
 
-        <div style={{ background: 'rgba(255, 50, 50, 0.2)', padding: '5px 10px', borderRadius: '8px', color: '#ff4444', display: 'flex', alignItems: 'center', gap: '5px', fontWeight: 'bold' }}>
-          <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ff4444', animation: 'pulse 2s infinite' }} />
-          LIVE AUCTION
+          <div style={{ background: 'rgba(255, 50, 50, 0.2)', padding: '5px 10px', borderRadius: '8px', color: '#ff4444', display: 'flex', alignItems: 'center', gap: '5px', fontWeight: 'bold' }}>
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ff4444', animation: 'pulse 2s infinite' }} />
+            LIVE
+          </div>
         </div>
       </header>
 
@@ -410,7 +456,6 @@ export default function AuctionRoom() {
               <Clock size={24} /> 00:{roomData.timeLeft < 10 ? `0${roomData.timeLeft || 0}` : (roomData.timeLeft || 0)}
             </div>
 
-            {/* Systematic Bid Action */}
             <div style={{ marginTop: '1.5rem' }}>
               <button 
                 className="btn-primary" 
@@ -421,7 +466,6 @@ export default function AuctionRoom() {
                 Place Bid (+{currentIncrement})
               </button>
             </div>
-            {/* Auto-sell handles it, no need for manual sell button, but if host wants to abort? No, user wanted fully automatic! */}
           </div>
 
           <div className="glass-panel" style={{ padding: '1rem', flex: 1, overflowY: 'auto' }}>
@@ -438,7 +482,7 @@ export default function AuctionRoom() {
                   <div key={index} style={{ background: 'rgba(0,0,0,0.4)', padding: '10px', borderRadius: '8px', borderLeft: owner.name === myTeamName ? '3px solid var(--primary)' : '3px solid var(--text-muted)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
                       <span style={{ fontWeight: 'bold', fontSize: '0.8rem' }}>
-                        {owner.name}
+                        {owner.name || `Empty Slot ${index + 1}`}
                       </span>
                     </div>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
