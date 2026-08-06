@@ -4,6 +4,7 @@ import { ArrowLeft, Coins, Clock, AlertTriangle, Users, MessageCircle, Send, Lis
 import { doc, onSnapshot, collection, query, orderBy, addDoc, serverTimestamp, limit } from 'firebase/firestore';
 import { db } from '../firebase';
 import RostersModal from '../components/RostersModal';
+import OnboardingTour from '../components/OnboardingTour';
 
 export default function ViewerRoom() {
   const navigate = useNavigate();
@@ -18,6 +19,7 @@ export default function ViewerRoom() {
   const [newMessage, setNewMessage] = useState('');
   const [reactions, setReactions] = useState([]);
   const [isRostersOpen, setIsRostersOpen] = useState(false);
+  const [mobileTab, setMobileTab] = useState('center'); // 'left', 'center', 'right'
 
   const viewerName = localStorage.getItem('pitchbid_viewer') || 'Anonymous Fan';
 
@@ -141,6 +143,7 @@ export default function ViewerRoom() {
   return (
     <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       
+      <OnboardingTour role="viewer" />
       <RostersModal isOpen={isRostersOpen} onClose={() => setIsRostersOpen(false)} roomData={roomData} players={players} />
 
       {/* Reactions Layer */}
@@ -195,7 +198,7 @@ export default function ViewerRoom() {
       <div className="dashboard-grid">
         
         {/* Left Sidebar: Live Chat */}
-        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column' }}>
+        <div className={`glass-panel mobile-tab-content ${mobileTab === 'left' ? 'active' : ''}`} style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--glass-border)' }}>
             <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)' }}>
               <MessageCircle size={16} /> Live Chat
@@ -232,7 +235,7 @@ export default function ViewerRoom() {
         </div>
 
         {/* Center: Main Stage / Broadcast View */}
-        <div className="glass-panel" style={{ position: 'relative', overflowY: 'auto', overflowX: 'hidden', padding: 0 }}>
+        <div className={`glass-panel mobile-tab-content ${mobileTab === 'center' ? 'active' : ''}`} style={{ position: 'relative', overflowY: 'auto', overflowX: 'hidden', padding: 0 }}>
           
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '100%', background: 'radial-gradient(circle at 50% 0%, rgba(0, 255, 136, 0.1) 0%, transparent 70%)', zIndex: 0, pointerEvents: 'none' }} />
           
@@ -314,7 +317,7 @@ export default function ViewerRoom() {
         </div>
 
         {/* Right Sidebar: Bidding Stats */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', minHeight: 0 }}>
+        <div className={`mobile-tab-content ${mobileTab === 'right' ? 'active' : ''}`} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', minHeight: 0 }}>
           
           <div className="glass-panel" style={{ padding: '2rem', textAlign: 'center', background: 'linear-gradient(180deg, rgba(30,30,35,0.8) 0%, rgba(20,20,24,0.9) 100%)', position: 'relative' }}>
             <p style={{ color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: '0.75rem', fontWeight: 'bold' }}>Current Bid</p>
@@ -368,7 +371,6 @@ export default function ViewerRoom() {
               })}
             </div>
             
-            {/* Reactions Bar */}
             <div style={{ marginTop: 'auto', paddingTop: '2rem', display: 'flex', justifyContent: 'space-around' }}>
                <button onClick={() => sendReaction('🔥')} style={{ background: 'transparent', border: 'none', fontSize: '1.5rem', cursor: 'pointer', transition: 'transform 0.1s' }} onMouseDown={e => e.currentTarget.style.transform='scale(0.8)'} onMouseUp={e => e.currentTarget.style.transform='scale(1)'}>🔥</button>
                <button onClick={() => sendReaction('❤️')} style={{ background: 'transparent', border: 'none', fontSize: '1.5rem', cursor: 'pointer', transition: 'transform 0.1s' }} onMouseDown={e => e.currentTarget.style.transform='scale(0.8)'} onMouseUp={e => e.currentTarget.style.transform='scale(1)'}>❤️</button>
@@ -377,6 +379,22 @@ export default function ViewerRoom() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Mobile Bottom Navigation */}
+      <div className="mobile-bottom-nav">
+        <button className={mobileTab === 'left' ? 'active' : ''} onClick={() => setMobileTab('left')}>
+          <MessageCircle size={20} />
+          <span>Chat</span>
+        </button>
+        <button className={mobileTab === 'center' ? 'active' : ''} onClick={() => setMobileTab('center')}>
+          <Play size={20} />
+          <span>Stage</span>
+        </button>
+        <button className={mobileTab === 'right' ? 'active' : ''} onClick={() => setMobileTab('right')}>
+          <Coins size={20} />
+          <span>Stats</span>
+        </button>
       </div>
     </div>
   );

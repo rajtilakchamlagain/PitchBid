@@ -27,6 +27,7 @@ export default function PlayerEntry() {
   
   // To hold the actual document ID once verified
   const [validatedRoomId, setValidatedRoomId] = useState('');
+  const [roomBudget, setRoomBudget] = useState(10000);
 
   const [formData, setFormData] = useState({
     game: 'football',
@@ -36,7 +37,8 @@ export default function PlayerEntry() {
     village: '',
     age: '',
     positions: [],
-    foot: 'Right'
+    foot: 'Right',
+    basePrice: null
   });
 
   const verifyCode = async () => {
@@ -62,6 +64,7 @@ export default function PlayerEntry() {
       }
       
       setValidatedRoomId(roomDoc.id);
+      setRoomBudget(data.budgetPerTeam || 10000);
       setStep(2);
     } catch (err) {
       console.error(err);
@@ -74,7 +77,7 @@ export default function PlayerEntry() {
     if (step === 1) {
       if (!formData.playerCode) return;
       await verifyCode();
-    } else if (step === 3) {
+    } else if (step === 4) {
       setIsSubmitting(true);
       try {
         await addDoc(collection(db, 'rooms', validatedRoomId, 'players'), {
@@ -85,10 +88,10 @@ export default function PlayerEntry() {
           foot: formData.foot,
           positions: formData.positions,
           status: 'pending', 
-          basePrice: 500,
+          basePrice: formData.basePrice || 200,
           createdAt: serverTimestamp()
         });
-        setStep(4);
+        setStep(5);
       } catch (error) {
         console.error("Error adding player: ", error);
         alert("Failed to register player.");
@@ -267,13 +270,58 @@ export default function PlayerEntry() {
               className="btn-primary" 
               style={{ marginTop: '1rem', width: '100%' }} 
               onClick={handleNext} 
-              disabled={formData.positions.length === 0 || isSubmitting}
+              disabled={formData.positions.length === 0}
             >
-              {isSubmitting ? "Submitting..." : "Submit Profile"}
+              Next Step
             </button>
           </div>
         );
       case 4:
+        const b1 = Math.max(10, Math.round((roomBudget * 0.01) / 10) * 10);
+        const b2 = Math.max(10, Math.round((roomBudget * 0.03) / 10) * 10);
+        const b3 = Math.max(10, Math.round((roomBudget * 0.05) / 10) * 10);
+        
+        return (
+          <div className="animate-fade-in delay-100" style={{ textAlign: 'left', padding: '0 1rem' }}>
+            <h2 style={{ fontSize: '1.5rem', marginBottom: '1.5rem', textAlign: 'center' }}>Set Base Price</h2>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center', marginBottom: '2rem' }}>
+              Select your starting bid amount. Higher prices mean fewer teams can afford you, but you guarantee a larger payout if sold!
+            </p>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {[
+                { amount: b1, percent: '1%', label: 'Safe & Affordable' },
+                { amount: b2, percent: '3%', label: 'Confident' },
+                { amount: b3, percent: '5%', label: 'Star Player Premium' }
+              ].map(tier => (
+                <button
+                  key={tier.amount}
+                  className={formData.basePrice === tier.amount ? "btn-primary" : "btn-outline"}
+                  style={{ padding: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: formData.basePrice === tier.amount ? 'none' : '1px solid var(--border-color)' }}
+                  onClick={() => setFormData({...formData, basePrice: tier.amount})}
+                >
+                  <div style={{ textAlign: 'left' }}>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>₹{tier.amount}</div>
+                    <div style={{ fontSize: '0.8rem', opacity: 0.8 }}>{tier.label}</div>
+                  </div>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 'bold', background: 'rgba(0,0,0,0.3)', padding: '4px 8px', borderRadius: '4px' }}>
+                    {tier.percent} of Team Budget
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <button 
+              className="btn-primary" 
+              style={{ marginTop: '2rem', width: '100%', padding: '1.2rem', fontSize: '1.1rem', background: 'linear-gradient(135deg, #00e5ff 0%, #0077ff 100%)' }} 
+              onClick={handleNext} 
+              disabled={!formData.basePrice || isSubmitting}
+            >
+              {isSubmitting ? "Submitting..." : "Submit Registration"}
+            </button>
+          </div>
+        );
+      case 5:
         return (
           <div className="animate-fade-in delay-100 text-center" style={{ padding: '0 1rem' }}>
             <div style={{ background: 'rgba(0, 255, 136, 0.1)', padding: '1.5rem', borderRadius: '50%', display: 'inline-block', marginBottom: '1.5rem' }}>
@@ -296,7 +344,7 @@ export default function PlayerEntry() {
   return (
     <div className="min-h-screen flex-center container">
       <div className="glass-panel" style={{ width: '100%', maxWidth: '500px', padding: '3rem 1rem', textAlign: 'center', position: 'relative' }}>
-        {step < 4 && (
+        {step < 5 && (
           <button 
             className="btn-outline" 
             style={{ position: 'absolute', top: '1rem', left: '1rem', padding: '8px 16px', fontSize: '0.9rem', border: 'none' }}

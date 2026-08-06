@@ -4,6 +4,7 @@ import { ArrowLeft, Coins, Clock, AlertTriangle, Users, Shuffle, CheckCircle2, I
 import { doc, getDoc, updateDoc, onSnapshot, collection, query, addDoc, serverTimestamp, orderBy, limit, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import RostersModal from '../components/RostersModal';
+import OnboardingTour from '../components/OnboardingTour';
 
 export default function AuctionRoom() {
   const navigate = useNavigate();
@@ -15,6 +16,8 @@ export default function AuctionRoom() {
   const [activePlayer, setActivePlayer] = useState(null);
   const [showRoomInfo, setShowRoomInfo] = useState(false);
   const [isRostersOpen, setIsRostersOpen] = useState(false);
+
+  const [mobileTab, setMobileTab] = useState('center'); // 'left', 'center', 'right'
 
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState('');
@@ -362,6 +365,8 @@ export default function AuctionRoom() {
   return (
     <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       {renderRoomInfoModal()}
+      
+      <OnboardingTour role={isHost ? 'host' : 'owner'} />
       <RostersModal isOpen={isRostersOpen} onClose={() => setIsRostersOpen(false)} roomData={roomData} players={players} />
       
       {/* Reactions Layer */}
@@ -444,7 +449,7 @@ export default function AuctionRoom() {
       <div className="dashboard-grid">
         
         {/* Left Sidebar: Draft Pool */}
-        <div className="glass-panel" style={{ padding: '1.5rem', overflowY: 'auto' }}>
+        <div className={`glass-panel mobile-tab-content ${mobileTab === 'left' ? 'active' : ''}`} style={{ padding: '1.5rem', overflowY: 'auto' }}>
           <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1.5rem', fontSize: '1rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)' }}>
             <Users size={16} /> Draft Pool <span style={{ color: 'var(--text-main)' }}>{pendingPlayers.length}</span>
           </h3>
@@ -499,7 +504,7 @@ export default function AuctionRoom() {
         </div>
 
         {/* Center: Main Stage / Broadcast View */}
-        <div className="glass-panel" style={{ position: 'relative', overflowY: 'auto', overflowX: 'hidden', padding: 0 }}>
+        <div className={`glass-panel mobile-tab-content ${mobileTab === 'center' ? 'active' : ''}`} style={{ position: 'relative', overflowY: 'auto', overflowX: 'hidden', padding: 0 }}>
           
           {/* Subtle Stage Background */}
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '100%', background: 'radial-gradient(circle at 50% 0%, rgba(0, 255, 136, 0.1) 0%, transparent 70%)', zIndex: 0, pointerEvents: 'none' }} />
@@ -630,7 +635,7 @@ export default function AuctionRoom() {
         </div>
 
         {/* Right Sidebar: Bidding Panel & Wallets */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', minHeight: 0 }}>
+        <div className={`mobile-tab-content ${mobileTab === 'right' ? 'active' : ''}`} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', minHeight: 0 }}>
           
           {/* Action Center */}
           <div className="glass-panel" style={{ padding: '2rem', textAlign: 'center', background: 'linear-gradient(180deg, rgba(30,30,35,0.8) 0%, rgba(20,20,24,0.9) 100%)', position: 'relative' }}>
@@ -662,48 +667,16 @@ export default function AuctionRoom() {
             {(() => {
               const currentPrice = roomData?.currentBid || activePlayer?.basePrice || 200;
               const autoInc = currentPrice >= 1000 ? 100 : 50;
-              const tb = roomData?.budgetPerTeam || 10000;
-              const b1 = Math.max(10, Math.round((tb * 0.01) / 10) * 10);
-              const b2 = Math.max(10, Math.round((tb * 0.03) / 10) * 10);
-              const b3 = Math.max(10, Math.round((tb * 0.05) / 10) * 10);
               
               return (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <button 
-                    className="btn-primary" 
-                    style={{ width: '100%', padding: '1.2rem', fontSize: '1.2rem' }} 
-                    onClick={() => handleBid(null)} 
-                    disabled={!activePlayer || roomData?.status !== 'live'}
-                  >
-                    BID +{autoInc}
-                  </button>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-                    <button 
-                      className="btn-outline" 
-                      style={{ padding: '0.8rem 0', fontSize: '0.9rem', borderColor: 'rgba(255,255,255,0.2)' }} 
-                      onClick={() => handleBid(b1)} 
-                      disabled={!activePlayer || roomData?.status !== 'live'}
-                    >
-                      +{b1} (1%)
-                    </button>
-                    <button 
-                      className="btn-outline" 
-                      style={{ padding: '0.8rem 0', fontSize: '0.9rem', borderColor: 'var(--primary)', color: 'var(--primary)' }} 
-                      onClick={() => handleBid(b2)} 
-                      disabled={!activePlayer || roomData?.status !== 'live'}
-                    >
-                      +{b2} (3%)
-                    </button>
-                    <button 
-                      className="btn-outline" 
-                      style={{ padding: '0.8rem 0', fontSize: '0.9rem', borderColor: '#ff0044', color: '#ff0044' }} 
-                      onClick={() => handleBid(b3)} 
-                      disabled={!activePlayer || roomData?.status !== 'live'}
-                    >
-                      +{b3} (5%)
-                    </button>
-                  </div>
-                </div>
+                <button 
+                  className="btn-primary" 
+                  style={{ width: '100%', padding: '1.2rem', fontSize: '1.2rem' }} 
+                  onClick={() => handleBid(null)} 
+                  disabled={!activePlayer || roomData?.status !== 'live'}
+                >
+                  BID +{autoInc}
+                </button>
               );
             })()}
           </div>
@@ -779,6 +752,22 @@ export default function AuctionRoom() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Mobile Bottom Navigation */}
+      <div className="mobile-bottom-nav">
+        <button className={mobileTab === 'left' ? 'active' : ''} onClick={() => setMobileTab('left')}>
+          <Users size={20} />
+          <span>Draft</span>
+        </button>
+        <button className={mobileTab === 'center' ? 'active' : ''} onClick={() => setMobileTab('center')}>
+          <Play size={20} />
+          <span>Stage</span>
+        </button>
+        <button className={mobileTab === 'right' ? 'active' : ''} onClick={() => setMobileTab('right')}>
+          <Coins size={20} />
+          <span>Bids</span>
+        </button>
       </div>
     </div>
   );
