@@ -219,7 +219,7 @@ export default function ViewerRoom() {
         </div>
 
         {/* Center: Main Stage / Broadcast View */}
-        <div className="glass-panel" style={{ position: 'relative', overflow: 'hidden', padding: 0 }}>
+        <div className="glass-panel" style={{ position: 'relative', overflowY: 'auto', overflowX: 'hidden', padding: 0 }}>
           
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '100%', background: 'radial-gradient(circle at 50% 0%, rgba(0, 255, 136, 0.1) 0%, transparent 70%)', zIndex: 0, pointerEvents: 'none' }} />
           
