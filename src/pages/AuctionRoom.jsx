@@ -387,6 +387,69 @@ export default function AuctionRoom() {
     );
   };
 
+  const actionCenter = (
+    <div className="glass-panel" style={{ padding: '2rem', textAlign: 'center', background: 'linear-gradient(180deg, rgba(30,30,35,0.8) 0%, rgba(20,20,24,0.9) 100%)', position: 'relative' }}>
+      <p style={{ color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: '0.75rem', fontWeight: 'bold' }}>Current Bid</p>
+      
+      <h1 className={pulseBid ? 'pulse-gold' : ''} style={{ 
+        fontSize: '4rem', color: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', 
+        margin: '0.5rem 0', fontWeight: '900', letterSpacing: '-0.02em', transition: 'color 0.2s'
+      }}>
+        <Coins size={32} /> {roomData?.currentBid || (activePlayer?.basePrice || 0)}
+      </h1>
+      
+      <div style={{ background: 'rgba(0,0,0,0.5)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', marginBottom: '1.5rem' }}>
+        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Highest Bidder</p>
+        <strong style={{ color: roomData?.highestBidder !== 'None' ? 'var(--primary)' : 'var(--text-muted)', fontSize: '1.1rem' }}>
+          {roomData?.highestBidder || 'None'}
+        </strong>
+      </div>
+      
+      <div style={{ 
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', 
+        color: roomData?.timeLeft <= 5 ? '#ff0044' : 'var(--text-main)', 
+        fontSize: '2rem', fontWeight: '900', marginBottom: '1.5rem',
+        textShadow: roomData?.timeLeft <= 5 ? '0 0 20px rgba(255,0,68,0.5)' : 'none'
+      }}>
+        <Clock size={28} /> 00:{roomData?.timeLeft < 10 ? `0${roomData?.timeLeft || 0}` : (roomData?.timeLeft || 0)}
+      </div>
+
+      {(() => {
+        const dynamicIncrement = Math.max(50, Math.round((roomData?.budgetPerTeam * 0.005) / 10) * 10);
+        const isWinning = roomData?.highestBidder === myTeamName;
+        
+        return (
+          <button 
+            className={isWinning ? "btn-outline" : "btn-primary"} 
+            style={{ 
+              width: '100%', padding: '1.2rem', fontSize: '1.2rem', 
+              transition: 'transform 0.1s, background-color 0.3s',
+              opacity: (!activePlayer || roomData?.status !== 'live') ? 0.5 : 1
+            }} 
+            onClick={() => handleBid(null)} 
+            onMouseDown={e => { if (!isWinning && activePlayer) e.currentTarget.style.transform = 'scale(0.95)' }}
+            onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
+            onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+            disabled={!activePlayer || roomData?.status !== 'live' || isWinning}
+          >
+            {isWinning ? "WINNING BID" : `BID +${dynamicIncrement}`}
+          </button>
+        );
+      })()}
+
+      {isHost && (
+        <div style={{ display: 'flex', gap: '10px', marginTop: '1.5rem' }}>
+          <button className="btn-outline" style={{ flex: 1, padding: '12px', borderColor: '#ff0044', color: '#ff0044' }} onClick={handleMarkUnsold} disabled={!activePlayer}>
+            <ThumbsDown size={18} /> Pass
+          </button>
+          <button className="btn-primary" style={{ flex: 2, padding: '12px' }} onClick={handleSellPlayer} disabled={!activePlayer || roomData?.highestBidder === 'None'}>
+            <CheckCircle2 size={18} /> SELL
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       {renderRoomInfoModal()}
@@ -648,6 +711,10 @@ export default function AuctionRoom() {
                       </div>
                     </div>
                   </div>
+
+                  <div className="mobile-only" style={{ marginTop: '2rem' }}>
+                    {actionCenter}
+                  </div>
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1 }}>
@@ -662,55 +729,9 @@ export default function AuctionRoom() {
         {/* Right Sidebar: Bidding Panel & Wallets */}
         <div className={`mobile-tab-content ${mobileTab === 'right' ? 'active' : ''}`} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', minHeight: 0 }}>
           
-          {/* Action Center */}
-          <div className="glass-panel" style={{ padding: '2rem', textAlign: 'center', background: 'linear-gradient(180deg, rgba(30,30,35,0.8) 0%, rgba(20,20,24,0.9) 100%)', position: 'relative' }}>
-            <p style={{ color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: '0.75rem', fontWeight: 'bold' }}>Current Bid</p>
-            
-            <h1 className={pulseBid ? 'pulse-gold' : ''} style={{ 
-              fontSize: '4rem', color: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', 
-              margin: '0.5rem 0', fontWeight: '900', letterSpacing: '-0.02em', transition: 'color 0.2s'
-            }}>
-              <Coins size={32} /> {roomData.currentBid || (activePlayer?.basePrice || 0)}
-            </h1>
-            
-            <div style={{ background: 'rgba(0,0,0,0.5)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', marginBottom: '1.5rem' }}>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Highest Bidder</p>
-              <strong style={{ color: roomData.highestBidder !== 'None' ? 'var(--primary)' : 'var(--text-muted)', fontSize: '1.1rem' }}>
-                {roomData.highestBidder || 'None'}
-              </strong>
-            </div>
-            
-            <div style={{ 
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', 
-              color: roomData.timeLeft <= 5 ? '#ff0044' : 'var(--text-main)', 
-              fontSize: '2rem', fontWeight: '900', marginBottom: '1.5rem',
-              textShadow: roomData.timeLeft <= 5 ? '0 0 20px rgba(255,0,68,0.5)' : 'none'
-            }}>
-              <Clock size={28} /> 00:{roomData.timeLeft < 10 ? `0${roomData.timeLeft || 0}` : (roomData.timeLeft || 0)}
-            </div>
-
-            {(() => {
-              const dynamicIncrement = Math.max(50, Math.round((roomData?.budgetPerTeam * 0.005) / 10) * 10);
-              const isWinning = roomData?.highestBidder === myTeamName;
-              
-              return (
-                <button 
-                  className={isWinning ? "btn-outline" : "btn-primary"} 
-                  style={{ 
-                    width: '100%', padding: '1.2rem', fontSize: '1.2rem', 
-                    transition: 'transform 0.1s, background-color 0.3s',
-                    opacity: (!activePlayer || roomData?.status !== 'live') ? 0.5 : 1
-                  }} 
-                  onClick={() => handleBid(null)} 
-                  onMouseDown={e => { if (!isWinning && activePlayer) e.currentTarget.style.transform = 'scale(0.95)' }}
-                  onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
-                  onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-                  disabled={!activePlayer || roomData?.status !== 'live' || isWinning}
-                >
-                  {isWinning ? "WINNING BID" : `BID +${dynamicIncrement}`}
-                </button>
-              );
-            })()}
+          {/* Action Center - Desktop View */}
+          <div className="desktop-only">
+            {actionCenter}
           </div>
 
           {/* Wallets */}

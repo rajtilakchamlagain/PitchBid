@@ -130,13 +130,21 @@ body {
 .mobile-bottom-nav {
   display: none;
 }
+.mobile-only { display: none !important; }
 
 @media (max-width: 1100px) {
   .dashboard-grid {
     grid-template-columns: 1fr;
-    height: calc(100vh - 80px - 70px); /* Leave room for nav */
+    height: calc(100vh - 80px - 100px); /* Leave ample room for nav */
     padding: 0 1rem 1rem;
     overflow: hidden;
+  }
+  
+  .mobile-only {
+    display: flex !important;
+  }
+  .desktop-only {
+    display: none !important;
   }
   
   .mobile-tab-content {
