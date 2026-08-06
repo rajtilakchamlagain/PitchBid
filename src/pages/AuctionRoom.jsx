@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Coins, Clock, AlertTriangle, Users, Shuffle, CheckCircle2, Info, X } from 'lucide-react';
+import { ArrowLeft, Coins, Clock, AlertTriangle, Users, Shuffle, CheckCircle2, Info, X, Edit2, Save } from 'lucide-react';
 import { doc, getDoc, updateDoc, onSnapshot, collection, query } from 'firebase/firestore';
 import { db } from '../firebase';
 
@@ -13,6 +13,10 @@ export default function AuctionRoom() {
   const [players, setPlayers] = useState([]);
   const [activePlayer, setActivePlayer] = useState(null);
   const [showRoomInfo, setShowRoomInfo] = useState(false);
+
+  // Inline editing state
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editNameValue, setEditNameValue] = useState('');
 
   const myTeamName = localStorage.getItem('pitchbid_team');
   const isHost = localStorage.getItem('pitchbid_isHost') === 'true';
@@ -198,6 +202,27 @@ export default function AuctionRoom() {
     });
   };
 
+  const handleSaveTeamName = async () => {
+    if (!editNameValue.trim() || editNameValue === myTeamName) {
+      setIsEditingName(false);
+      return;
+    }
+    const newName = editNameValue.trim();
+    const updatedOwners = roomData.owners.map(o => {
+      if (o.name === myTeamName) return { ...o, name: newName };
+      return o;
+    });
+    
+    try {
+      await updateDoc(doc(db, 'rooms', roomCode), { owners: updatedOwners });
+      localStorage.setItem('pitchbid_team', newName);
+      // To trigger a re-render or reload for simplicity so local variables update cleanly, but react router works too.
+      window.location.reload(); 
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   if (!roomData) return <div className="min-h-screen flex-center"><h2 className="text-gradient">Loading Room...</h2></div>;
 
   const pendingPlayers = players.filter(p => p.status === 'pending');
@@ -226,12 +251,12 @@ export default function AuctionRoom() {
               <h3 style={{ fontSize: '1.5rem', color: 'var(--secondary)', margin: 0 }}>{roomData.ownerCode}</h3>
             </div>
 
-            <div style={{ background: 'rgba(0,0,0,0.5)', padding: '15px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+            <div style={{ background: 'rgba(0,0,0,0.5)', padding: '15px', borderRadius: '8px', border: '1px solid var(--glass-border)', maxHeight: '30vh', overflowY: 'auto' }}>
               <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '10px' }}>Owner Slot Passwords</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                 {roomData.owners?.map((o, idx) => (
-                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px', background: 'rgba(0,0,0,0.3)', borderRadius: '4px' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Slot {idx + 1} {o.name ? `(${o.name})` : '(Empty)'}</span>
+                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', background: 'rgba(0,0,0,0.3)', borderRadius: '4px' }}>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Slot {idx + 1} {o.name ? `(${o.name})` : '(Empty)'}</span>
                     <strong style={{ color: 'var(--text-main)' }}>{o.pass}</strong>
                   </div>
                 ))}
@@ -254,59 +279,6 @@ export default function AuctionRoom() {
     );
   };
 
-  // LOBBY VIEW
-  if (roomData.status === 'waiting') {
-    return (
-      <div className="min-h-screen flex-center container">
-        {renderRoomInfoModal()}
-        <div className="glass-panel" style={{ width: '100%', maxWidth: '600px', padding: '3rem', textAlign: 'center', position: 'relative' }}>
-          
-          {isHost && (
-            <button 
-              className="btn-outline" 
-              onClick={() => setShowRoomInfo(true)}
-              style={{ position: 'absolute', top: '1rem', right: '1rem', padding: '8px 12px', display: 'flex', gap: '5px', alignItems: 'center' }}
-            >
-              <Info size={16} /> Room Info
-            </button>
-          )}
-
-          <h2 style={{ fontSize: '2rem', marginBottom: '1rem' }} className="text-gradient">Pre-Auction Lobby</h2>
-          <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>Waiting for all owners to join and ready up.</p>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '2rem' }}>
-            {roomData.owners?.map((o, idx) => (
-              <div key={idx} style={{ background: 'rgba(0,0,0,0.3)', padding: '15px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                {o.name ? (
-                  <>
-                    <span style={{ fontWeight: 'bold' }}>{o.name} {o.name === myTeamName && '(You)'}</span>
-                    {o.isReady ? <span style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '5px' }}><CheckCircle2 size={16} /> Ready</span> : <span style={{ color: 'var(--text-muted)' }}>Waiting...</span>}
-                  </>
-                ) : (
-                  <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Empty Slot (Slot {idx + 1})</span>
-                )}
-              </div>
-            ))}
-          </div>
-
-          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-            {!isMyReady && (
-              <button className="btn-primary" onClick={handleReady}>
-                I Am Ready
-              </button>
-            )}
-            {isHost && (
-              <button className="btn-primary" style={{ backgroundImage: 'linear-gradient(135deg, var(--secondary), #00ff88)' }} disabled={!allOwnersReady} onClick={handleStartAuction}>
-                Start Auction
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // MAIN LIVE VIEW
   const currentIncrement = (roomData.currentBid || (activePlayer?.basePrice || 500)) >= 2000 ? 500 : 100;
 
   return (
@@ -319,6 +291,7 @@ export default function AuctionRoom() {
           <button className="btn-outline" style={{ padding: '8px 16px', border: 'none' }} onClick={() => navigate('/')}>
             <ArrowLeft size={16} /> Exit
           </button>
+          
           <span style={{ fontSize: '1rem', fontWeight: 'bold' }}>Team: <span className="text-gradient">{myTeamName}</span> {isHost && '(Host)'}</span>
         </div>
         
@@ -333,9 +306,9 @@ export default function AuctionRoom() {
             </button>
           )}
 
-          <div style={{ background: 'rgba(255, 50, 50, 0.2)', padding: '5px 10px', borderRadius: '8px', color: '#ff4444', display: 'flex', alignItems: 'center', gap: '5px', fontWeight: 'bold' }}>
-            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ff4444', animation: 'pulse 2s infinite' }} />
-            LIVE
+          <div style={{ background: roomData.status === 'live' ? 'rgba(255, 50, 50, 0.2)' : 'rgba(0, 212, 255, 0.2)', padding: '5px 10px', borderRadius: '8px', color: roomData.status === 'live' ? '#ff4444' : 'var(--secondary)', display: 'flex', alignItems: 'center', gap: '5px', fontWeight: 'bold' }}>
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: roomData.status === 'live' ? '#ff4444' : 'var(--secondary)', animation: 'pulse 2s infinite' }} />
+            {roomData.status === 'live' ? 'LIVE' : 'LOBBY'}
           </div>
         </div>
       </header>
@@ -348,7 +321,7 @@ export default function AuctionRoom() {
             <Users size={18} /> Draft Pool ({pendingPlayers.length})
           </h3>
 
-          {isHost && pendingPlayers.length > 0 && (
+          {isHost && pendingPlayers.length > 0 && roomData.status === 'live' && (
             <button 
               className="btn-primary" 
               style={{ width: '100%', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
@@ -374,7 +347,7 @@ export default function AuctionRoom() {
               <div key={p.id} style={{ background: 'rgba(0,0,0,0.3)', padding: '10px', borderRadius: '8px', borderLeft: '3px solid var(--primary)' }}>
                 <p style={{ fontWeight: 'bold' }}>{p.realName}</p>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{p.positions?.join(', ')} • {p.village}</p>
-                {isHost && (
+                {isHost && roomData.status === 'live' && (
                   <button 
                     className="btn-outline" 
                     style={{ width: '100%', marginTop: '10px', padding: '4px', fontSize: '0.8rem' }}
@@ -393,50 +366,88 @@ export default function AuctionRoom() {
           
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '150px', background: 'linear-gradient(180deg, rgba(0,255,136,0.1) 0%, transparent 100%)', zIndex: 0 }} />
           
-          <h2 style={{ fontSize: '1.2rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.2em', zIndex: 1, marginBottom: '2rem' }}>On The Block</h2>
-          
-          {activePlayer ? (
-            <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', zIndex: 1, width: '100%', padding: '0 1rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-              <div style={{ width: '180px', height: '240px', borderRadius: '12px', background: 'rgba(0,0,0,0.5)', border: '2px solid var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Users size={64} color="var(--text-muted)" />
+          {roomData.status === 'waiting' ? (
+            <div style={{ zIndex: 1, width: '100%', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+              <h2 style={{ fontSize: '2.5rem', marginBottom: '1rem' }} className="text-gradient">Waiting for Owners</h2>
+              <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>All owners must mark themselves ready before the host can start the auction.</p>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', maxWidth: '400px', marginBottom: '2rem' }}>
+                {roomData.owners?.map((o, idx) => (
+                  <div key={idx} style={{ background: 'rgba(0,0,0,0.5)', padding: '15px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: o.name === myTeamName ? '1px solid var(--primary)' : '1px solid transparent' }}>
+                    <span style={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {o.name ? o.name : <span style={{ color: 'var(--text-muted)' }}>Empty Slot {idx + 1}</span>}
+                    </span>
+                    {o.isReady ? <span style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '5px' }}><CheckCircle2 size={16} /> Ready</span> : <span style={{ color: 'var(--text-muted)' }}>Waiting...</span>}
+                  </div>
+                ))}
               </div>
-              <div style={{ flex: 1, minWidth: '250px' }}>
-                <h1 style={{ fontSize: '3rem', lineHeight: '1.1', marginBottom: '0.5rem' }} className="text-gradient">
-                  {activePlayer.realName}
-                </h1>
-                {activePlayer.nickName && (
-                  <h3 style={{ fontSize: '1.2rem', color: 'var(--text-muted)', fontStyle: 'italic', marginBottom: '1.5rem' }}>
-                    "{activePlayer.nickName}"
-                  </h3>
+
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                {!isMyReady && (
+                  <button className="btn-primary" onClick={handleReady} style={{ padding: '15px 30px', fontSize: '1.2rem' }}>
+                    I Am Ready
+                  </button>
                 )}
-                
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '1rem' }}>
-                  <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.8rem', borderRadius: '8px' }}>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', textTransform: 'uppercase' }}>Pos</p>
-                    <p style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{activePlayer.positions?.join(', ')}</p>
-                  </div>
-                  <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.8rem', borderRadius: '8px' }}>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', textTransform: 'uppercase' }}>Village</p>
-                    <p style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{activePlayer.village}</p>
-                  </div>
-                  <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.8rem', borderRadius: '8px' }}>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', textTransform: 'uppercase' }}>Foot/Age</p>
-                    <p style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{activePlayer.foot} • {activePlayer.age}</p>
-                  </div>
-                  <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.8rem', borderRadius: '8px', border: '1px solid var(--primary)' }}>
-                    <p style={{ color: 'var(--primary)', fontSize: '0.8rem', textTransform: 'uppercase' }}>Base</p>
-                    <p style={{ fontSize: '1.1rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      <Coins size={14} /> {activePlayer.basePrice || 500}
-                    </p>
-                  </div>
-                </div>
+                {isHost && (
+                  <button 
+                    className="btn-primary" 
+                    style={{ backgroundImage: 'linear-gradient(135deg, var(--secondary), #00ff88)', padding: '15px 30px', fontSize: '1.2rem' }} 
+                    disabled={!allOwnersReady} 
+                    onClick={handleStartAuction}
+                  >
+                    Start Auction
+                  </button>
+                )}
               </div>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--text-muted)' }}>
-              <AlertTriangle size={48} style={{ marginBottom: '1rem', opacity: 0.5 }} />
-              <h3>Waiting for Host to send a player...</h3>
-            </div>
+            <>
+              <h2 style={{ fontSize: '1.2rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.2em', zIndex: 1, marginBottom: '2rem' }}>On The Block</h2>
+              
+              {activePlayer ? (
+                <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', zIndex: 1, width: '100%', padding: '0 1rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+                  <div style={{ width: '180px', height: '240px', borderRadius: '12px', background: 'rgba(0,0,0,0.5)', border: '2px solid var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Users size={64} color="var(--text-muted)" />
+                  </div>
+                  <div style={{ flex: 1, minWidth: '250px' }}>
+                    <h1 style={{ fontSize: '3rem', lineHeight: '1.1', marginBottom: '0.5rem' }} className="text-gradient">
+                      {activePlayer.realName}
+                    </h1>
+                    {activePlayer.nickName && (
+                      <h3 style={{ fontSize: '1.2rem', color: 'var(--text-muted)', fontStyle: 'italic', marginBottom: '1.5rem' }}>
+                        "{activePlayer.nickName}"
+                      </h3>
+                    )}
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '1rem' }}>
+                      <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.8rem', borderRadius: '8px' }}>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', textTransform: 'uppercase' }}>Pos</p>
+                        <p style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{activePlayer.positions?.join(', ')}</p>
+                      </div>
+                      <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.8rem', borderRadius: '8px' }}>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', textTransform: 'uppercase' }}>Village</p>
+                        <p style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{activePlayer.village}</p>
+                      </div>
+                      <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.8rem', borderRadius: '8px' }}>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', textTransform: 'uppercase' }}>Foot/Age</p>
+                        <p style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{activePlayer.foot} • {activePlayer.age}</p>
+                      </div>
+                      <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.8rem', borderRadius: '8px', border: '1px solid var(--primary)' }}>
+                        <p style={{ color: 'var(--primary)', fontSize: '0.8rem', textTransform: 'uppercase' }}>Base</p>
+                        <p style={{ fontSize: '1.1rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <Coins size={14} /> {activePlayer.basePrice || 500}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--text-muted)' }}>
+                  <AlertTriangle size={48} style={{ marginBottom: '1rem', opacity: 0.5 }} />
+                  <h3>Waiting for Host to send a player...</h3>
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -461,7 +472,7 @@ export default function AuctionRoom() {
                 className="btn-primary" 
                 style={{ width: '100%', padding: '12px 5px', fontSize: '1rem', fontWeight: 'bold' }} 
                 onClick={handleBid} 
-                disabled={!activePlayer}
+                disabled={!activePlayer || roomData.status !== 'live'}
               >
                 Place Bid (+{currentIncrement})
               </button>
@@ -480,10 +491,36 @@ export default function AuctionRoom() {
                 
                 return (
                   <div key={index} style={{ background: 'rgba(0,0,0,0.4)', padding: '10px', borderRadius: '8px', borderLeft: owner.name === myTeamName ? '3px solid var(--primary)' : '3px solid var(--text-muted)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                      <span style={{ fontWeight: 'bold', fontSize: '0.8rem' }}>
-                        {owner.name || `Empty Slot ${index + 1}`}
-                      </span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+                      
+                      {isEditingName && owner.name === myTeamName ? (
+                        <div style={{ display: 'flex', gap: '5px' }}>
+                          <input 
+                            type="text" 
+                            className="premium-input" 
+                            style={{ padding: '2px 5px', fontSize: '0.8rem', margin: 0, width: '100px' }}
+                            value={editNameValue}
+                            onChange={(e) => setEditNameValue(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSaveTeamName()}
+                          />
+                          <button onClick={handleSaveTeamName} style={{ background: 'transparent', border: 'none', color: 'var(--primary)', cursor: 'pointer', padding: 0 }}>
+                            <Save size={16} />
+                          </button>
+                        </div>
+                      ) : (
+                        <span style={{ fontWeight: 'bold', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          {owner.name || `Team ${index + 1}`}
+                          {owner.name === myTeamName && (
+                            <button 
+                              onClick={() => { setIsEditingName(true); setEditNameValue(owner.name); }} 
+                              style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0 }}
+                            >
+                              <Edit2 size={12} />
+                            </button>
+                          )}
+                        </span>
+                      )}
+
                     </div>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
                       <Coins size={12} /> {remaining} left
