@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Lock, Trophy, Users, Coins, Share2, Copy, CheckCircle2 } from 'lucide-react';
-import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { ArrowLeft, Lock, Trophy, Users, Coins, Copy, CheckCircle2 } from 'lucide-react';
+import { doc, setDoc, getDocs, updateDoc, serverTimestamp, collection, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 
 export default function OwnerEntry() {
@@ -9,7 +9,7 @@ export default function OwnerEntry() {
   const [searchParams] = useSearchParams();
   
   const [mode, setMode] = useState('select');
-  const [copied, setCopied] = useState(false);
+  const [copiedCode, setCopiedCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
   const [tournamentData, setTournamentData] = useState({
@@ -19,13 +19,35 @@ export default function OwnerEntry() {
     hostTeamName: ''
   });
   
-  const [roomCode, setRoomCode] = useState('');
+  const [generatedCodes, setGeneratedCodes] = useState({ owner: '', player: '', viewer: '' });
   
   const [joinCode, setJoinCode] = useState('');
   const [joinTeamName, setJoinTeamName] = useState('');
   
   const [error, setError] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // A quick one-time migration hook to fix PF52HZ (requested by user)
+  useEffect(() => {
+    const runMigration = async () => {
+      try {
+        const roomRef = doc(db, 'rooms', 'PF52HZ');
+        const snap = await getDocs(query(collection(db, 'rooms'), where('ownerCode', '==', 'PF52HZ')));
+        if (snap.empty) {
+          // If we haven't migrated PF52HZ yet, do it
+          const randPlayer = Math.random().toString(36).substring(2, 8).toUpperCase();
+          const randViewer = Math.random().toString(36).substring(2, 8).toUpperCase();
+          await updateDoc(roomRef, {
+            ownerCode: 'PF52HZ',
+            playerCode: randPlayer,
+            viewerCode: randViewer,
+            status: 'waiting'
+          }).catch(e => console.log('Migration skip: ', e)); // ignore if doesn't exist
+        }
+      } catch(e) { }
+    };
+    runMigration();
+  }, []);
 
   useEffect(() => {
     const inviteCode = searchParams.get('invite');
@@ -37,14 +59,15 @@ export default function OwnerEntry() {
 
   const handleCreateTournament = async () => {
     setIsLoading(true);
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const ownerCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const playerCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const viewerCode = Math.random().toString(36).substring(2, 8).toUpperCase();
     
     try {
       const budgetNum = Number(tournamentData.budget);
-      // Host automatically becomes the first owner
-      const hostOwner = { name: tournamentData.hostTeamName, budget: budgetNum };
+      const hostOwner = { name: tournamentData.hostTeamName, budget: budgetNum, isReady: false };
 
-      await setDoc(doc(db, 'rooms', code), {
+      await setDoc(doc(db, 'rooms', ownerCode), {
         name: tournamentData.name,
         numOwners: Number(tournamentData.numOwners),
         budgetPerTeam: budgetNum,
@@ -54,14 +77,16 @@ export default function OwnerEntry() {
         currentBid: 0,
         highestBidder: 'None',
         timeLeft: 15,
-        owners: [hostOwner] // Array to track all joined owners
+        ownerCode,
+        playerCode,
+        viewerCode,
+        owners: [hostOwner]
       });
       
-      // Save identity locally
       localStorage.setItem('pitchbid_team', tournamentData.hostTeamName);
       localStorage.setItem('pitchbid_isHost', 'true');
       
-      setRoomCode(code);
+      setGeneratedCodes({ owner: ownerCode, player: playerCode, viewer: viewerCode });
       setMode('share');
     } catch (err) {
       console.error(err);
@@ -71,11 +96,10 @@ export default function OwnerEntry() {
     }
   };
 
-  const handleCopyLink = () => {
-    const link = `${window.location.origin}/owner-entry?invite=${roomCode}`;
-    navigator.clipboard.writeText(link);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopy = (text, type) => {
+    navigator.clipboard.writeText(text);
+    setCopiedCode(type);
+    setTimeout(() => setCopiedCode(''), 2000);
   };
 
   const handleJoin = async () => {
@@ -88,15 +112,14 @@ export default function OwnerEntry() {
 
     setIsLoading(true);
     try {
-      const roomRef = doc(db, 'rooms', joinCode);
-      const roomSnap = await getDoc(roomRef);
+      const q = query(collection(db, 'rooms'), where('ownerCode', '==', joinCode));
+      const snap = await getDocs(q);
       
-      if (roomSnap.exists()) {
-        const data = roomSnap.data();
+      if (!snap.empty) {
+        const roomDoc = snap.docs[0];
+        const data = roomDoc.data();
         
-        // Check if room is full
         if (data.owners && data.owners.length >= data.numOwners) {
-          // Allow re-entry if this team name is already in the room
           const isReturningOwner = data.owners.some(o => o.name === joinTeamName);
           if (!isReturningOwner) {
             setError(true);
@@ -107,23 +130,21 @@ export default function OwnerEntry() {
           }
         }
         
-        // Add owner to room if they aren't already in it
         const isReturningOwner = data.owners?.some(o => o.name === joinTeamName);
         if (!isReturningOwner) {
-          const newOwnersList = [...(data.owners || []), { name: joinTeamName, budget: data.budgetPerTeam }];
-          await updateDoc(roomRef, {
+          const newOwnersList = [...(data.owners || []), { name: joinTeamName, budget: data.budgetPerTeam, isReady: false }];
+          await updateDoc(doc(db, 'rooms', roomDoc.id), {
             owners: newOwnersList
           });
         }
         
-        // Save identity
         localStorage.setItem('pitchbid_team', joinTeamName);
         localStorage.setItem('pitchbid_isHost', 'false');
         
-        navigate(`/auction?room=${joinCode}`);
+        navigate(`/auction?room=${roomDoc.id}`);
       } else {
         setError(true);
-        setErrorMsg("Room not found");
+        setErrorMsg("Tournament not found");
         setTimeout(() => setError(false), 2000);
       }
     } catch (err) {
@@ -216,7 +237,7 @@ export default function OwnerEntry() {
             onClick={handleCreateTournament}
             disabled={!tournamentData.name || !tournamentData.hostTeamName || isLoading}
           >
-            {isLoading ? "Generating..." : "Generate Room"}
+            {isLoading ? "Generating..." : "Generate Codes"}
           </button>
         </div>
       );
@@ -224,27 +245,50 @@ export default function OwnerEntry() {
 
     if (mode === 'share') {
       return (
-        <div className="animate-fade-in delay-100">
-          <div style={{ background: 'rgba(0, 255, 136, 0.1)', padding: '1.5rem', borderRadius: '50%', display: 'inline-block', marginBottom: '1rem' }}>
-            <CheckCircle2 size={40} color="var(--primary)" />
+        <div className="animate-fade-in delay-100 text-left">
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ background: 'rgba(0, 255, 136, 0.1)', padding: '1rem', borderRadius: '50%', display: 'inline-block', marginBottom: '1rem' }}>
+              <CheckCircle2 size={32} color="var(--primary)" />
+            </div>
+            <h2 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>Tournament Created!</h2>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>Share these specific codes.</p>
           </div>
-          <h2 style={{ fontSize: '1.8rem', marginBottom: '0.5rem' }}>Room Created!</h2>
-          <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>Share this code with your partner owners and players.</p>
           
-          <div style={{ background: 'rgba(0,0,0,0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px dashed var(--primary)', marginBottom: '1.5rem' }}>
-            <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Room Code</p>
-            <h1 style={{ fontSize: '3rem', letterSpacing: '0.2em', color: 'var(--text-main)', margin: 0 }}>{roomCode}</h1>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
+            {/* Owner Code */}
+            <div style={{ background: 'rgba(0,212,255,0.1)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>For Partner Owners</p>
+                <h3 style={{ fontSize: '1.5rem', letterSpacing: '0.1em', color: 'var(--secondary)', margin: 0 }}>{generatedCodes.owner}</h3>
+              </div>
+              <button className="btn-outline" style={{ padding: '8px' }} onClick={() => handleCopy(generatedCodes.owner, 'owner')}>
+                {copiedCode === 'owner' ? <CheckCircle2 size={16} /> : <Copy size={16} />}
+              </button>
+            </div>
+            {/* Player Code */}
+            <div style={{ background: 'rgba(0,255,136,0.1)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--primary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>For Players (Registration)</p>
+                <h3 style={{ fontSize: '1.5rem', letterSpacing: '0.1em', color: 'var(--primary)', margin: 0 }}>{generatedCodes.player}</h3>
+              </div>
+              <button className="btn-outline" style={{ padding: '8px' }} onClick={() => handleCopy(generatedCodes.player, 'player')}>
+                {copiedCode === 'player' ? <CheckCircle2 size={16} /> : <Copy size={16} />}
+              </button>
+            </div>
+            {/* Viewer Code */}
+            <div style={{ background: 'rgba(255,0,128,0.1)', padding: '1rem', borderRadius: '8px', border: '1px solid #ff0080', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>For Live Viewers</p>
+                <h3 style={{ fontSize: '1.5rem', letterSpacing: '0.1em', color: '#ff0080', margin: 0 }}>{generatedCodes.viewer}</h3>
+              </div>
+              <button className="btn-outline" style={{ padding: '8px' }} onClick={() => handleCopy(generatedCodes.viewer, 'viewer')}>
+                {copiedCode === 'viewer' ? <CheckCircle2 size={16} /> : <Copy size={16} />}
+              </button>
+            </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
-            <button className="btn-outline" style={{ flex: 1 }} onClick={handleCopyLink}>
-              {copied ? <CheckCircle2 size={18} /> : <Copy size={18} />} 
-              {copied ? 'Copied!' : 'Copy Invite Link'}
-            </button>
-          </div>
-          
-          <button className="btn-primary" style={{ width: '100%' }} onClick={() => navigate(`/auction?room=${roomCode}`)}>
-            Enter Host Dashboard
+          <button className="btn-primary" style={{ width: '100%' }} onClick={() => navigate(`/auction?room=${generatedCodes.owner}`)}>
+            Enter Pre-Auction Lobby
           </button>
         </div>
       );
@@ -258,7 +302,7 @@ export default function OwnerEntry() {
           </div>
           
           <h2 style={{ fontSize: '1.8rem', marginBottom: '0.5rem' }}>Join Tournament</h2>
-          <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>Enter the room code provided by the host.</p>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '2rem', fontSize: '0.9rem' }}>Enter the Owner code provided by the host.</p>
           
           <div className="input-group" style={{ textAlign: 'left', marginBottom: '1rem' }}>
             <label>Your Team Name</label>
@@ -272,11 +316,11 @@ export default function OwnerEntry() {
           </div>
 
           <div className="input-group" style={{ textAlign: 'left' }}>
-            <label>Room Code</label>
+            <label>Owner Code</label>
             <input 
               type="text" 
               className="premium-input" 
-              placeholder="ROOM CODE"
+              placeholder="OWNER CODE"
               value={joinCode}
               onChange={e => setJoinCode(e.target.value.toUpperCase())}
               style={{ 
@@ -288,7 +332,7 @@ export default function OwnerEntry() {
               }}
               onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
             />
-            {error && <span style={{ color: 'red', fontSize: '0.9rem', marginTop: '0.5rem', textAlign: 'center', display: 'block' }}>{errorMsg}</span>}
+            {error && <span style={{ color: 'red', fontSize: '0.8rem', marginTop: '0.5rem', textAlign: 'center', display: 'block' }}>{errorMsg}</span>}
           </div>
           
           <button className="btn-primary" style={{ width: '100%', marginTop: '1rem' }} onClick={handleJoin} disabled={!joinCode || !joinTeamName || isLoading}>
@@ -301,10 +345,10 @@ export default function OwnerEntry() {
 
   return (
     <div className="min-h-screen flex-center container">
-      <div className="glass-panel" style={{ width: '100%', maxWidth: '500px', padding: '3rem', textAlign: 'center', position: 'relative' }}>
+      <div className="glass-panel" style={{ width: '100%', maxWidth: '450px', padding: '2rem', textAlign: 'center', position: 'relative' }}>
         <button 
           className="btn-outline" 
-          style={{ position: 'absolute', top: '2rem', left: '2rem', padding: '8px 16px', fontSize: '0.9rem', border: 'none' }}
+          style={{ position: 'absolute', top: '1.5rem', left: '1.5rem', padding: '6px 12px', fontSize: '0.8rem', border: 'none' }}
           onClick={() => {
             if (mode === 'select') navigate('/');
             else setMode('select');
