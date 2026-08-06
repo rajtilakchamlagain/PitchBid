@@ -1,28 +1,28 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Lock, Trophy, Users, Coins, Share2, Copy, CheckCircle2 } from 'lucide-react';
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../firebase';
 
 export default function OwnerEntry() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   
-  // Modes: 'select', 'host', 'share', 'join'
   const [mode, setMode] = useState('select');
   const [copied, setCopied] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   
-  // Host Form State
   const [tournamentData, setTournamentData] = useState({
     name: '',
     numOwners: 4,
     budget: 10000
   });
   
-  // Generated Room Data
   const [roomCode, setRoomCode] = useState('');
   
-  // Join Form State
   const [joinCode, setJoinCode] = useState('');
   const [error, setError] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
     const inviteCode = searchParams.get('invite');
@@ -32,11 +32,28 @@ export default function OwnerEntry() {
     }
   }, [searchParams]);
 
-  const handleCreateTournament = () => {
-    // Mock room generation
+  const handleCreateTournament = async () => {
+    setIsLoading(true);
+    // Generate a random 6 character code
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-    setRoomCode(code);
-    setMode('share');
+    
+    try {
+      await setDoc(doc(db, 'rooms', code), {
+        name: tournamentData.name,
+        numOwners: Number(tournamentData.numOwners),
+        budgetPerTeam: Number(tournamentData.budget),
+        status: 'waiting', // waiting, active, finished
+        createdAt: serverTimestamp(),
+        activePlayerId: null // used to show which player is currently on the block
+      });
+      setRoomCode(code);
+      setMode('share');
+    } catch (err) {
+      console.error(err);
+      alert("Failed to create tournament. Check database rules.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleCopyLink = () => {
@@ -46,12 +63,33 @@ export default function OwnerEntry() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleJoin = () => {
-    if (joinCode.length >= 4) {
-      navigate('/auction');
-    } else {
+  const handleJoin = async () => {
+    if (joinCode.length < 4) {
       setError(true);
+      setErrorMsg("Code too short");
       setTimeout(() => setError(false), 2000);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const roomRef = doc(db, 'rooms', joinCode);
+      const roomSnap = await getDoc(roomRef);
+      
+      if (roomSnap.exists()) {
+        navigate(`/auction?room=${joinCode}`);
+      } else {
+        setError(true);
+        setErrorMsg("Room not found");
+        setTimeout(() => setError(false), 2000);
+      }
+    } catch (err) {
+      console.error(err);
+      setError(true);
+      setErrorMsg("Network error");
+      setTimeout(() => setError(false), 2000);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -122,9 +160,9 @@ export default function OwnerEntry() {
             className="btn-primary" 
             style={{ width: '100%', marginTop: '1rem' }} 
             onClick={handleCreateTournament}
-            disabled={!tournamentData.name}
+            disabled={!tournamentData.name || isLoading}
           >
-            Generate Room
+            {isLoading ? "Generating..." : "Generate Room"}
           </button>
         </div>
       );
@@ -137,7 +175,7 @@ export default function OwnerEntry() {
             <CheckCircle2 size={40} color="var(--primary)" />
           </div>
           <h2 style={{ fontSize: '1.8rem', marginBottom: '0.5rem' }}>Room Created!</h2>
-          <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>Share this code with your partner owners.</p>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>Share this code with your partner owners and players.</p>
           
           <div style={{ background: 'rgba(0,0,0,0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px dashed var(--primary)', marginBottom: '1.5rem' }}>
             <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Room Code</p>
@@ -149,17 +187,10 @@ export default function OwnerEntry() {
               {copied ? <CheckCircle2 size={18} /> : <Copy size={18} />} 
               {copied ? 'Copied!' : 'Copy Invite Link'}
             </button>
-            <button className="btn-outline" style={{ flex: 1 }} onClick={() => {
-              const text = `Join my auction room on PitchBid! Code: ${roomCode}\nLink: ${window.location.origin}/owner-entry?invite=${roomCode}`;
-              navigator.clipboard.writeText(text);
-              alert("Invitation text copied to clipboard!");
-            }}>
-              <Share2 size={18} /> Share Info
-            </button>
           </div>
           
-          <button className="btn-primary" style={{ width: '100%' }} onClick={() => navigate('/auction')}>
-            Enter Auction Room
+          <button className="btn-primary" style={{ width: '100%' }} onClick={() => navigate(`/auction?room=${roomCode}`)}>
+            Enter Host Dashboard
           </button>
         </div>
       );
@@ -191,11 +222,11 @@ export default function OwnerEntry() {
               }}
               onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
             />
-            {error && <span style={{ color: 'red', fontSize: '0.9rem', marginTop: '0.5rem', textAlign: 'center' }}>Invalid Room Code</span>}
+            {error && <span style={{ color: 'red', fontSize: '0.9rem', marginTop: '0.5rem', textAlign: 'center' }}>{errorMsg}</span>}
           </div>
           
-          <button className="btn-primary" style={{ width: '100%', marginTop: '1rem' }} onClick={handleJoin} disabled={!joinCode}>
-            Unlock Podium
+          <button className="btn-primary" style={{ width: '100%', marginTop: '1rem' }} onClick={handleJoin} disabled={!joinCode || isLoading}>
+            {isLoading ? "Unlocking..." : "Unlock Podium"}
           </button>
         </div>
       );
