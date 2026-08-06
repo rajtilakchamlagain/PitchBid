@@ -331,10 +331,37 @@ export default function PlayerEntry() {
             <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>
               Your profile has been submitted to the draft pool. The auctioneer will pull your name during the live event.
             </p>
-            <div style={{ background: 'rgba(0,0,0,0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--primary)' }}>
+            <div style={{ background: 'rgba(0,0,0,0.3)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--primary)', marginBottom: '2rem' }}>
               <h3 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--text-main)' }}>{formData.realName}</h3>
               <p style={{ color: 'var(--primary)', marginTop: '5px' }}>{formData.positions.join(', ')}</p>
             </div>
+            
+            <button 
+              className="btn-outline" 
+              style={{ width: '100%', padding: '1rem', fontSize: '1rem' }} 
+              onClick={() => {
+                setFormData({
+                  playerCode: formData.playerCode,
+                  realName: '',
+                  nickName: '',
+                  village: '',
+                  age: '',
+                  positions: [],
+                  foot: '',
+                  basePrice: null
+                });
+                setStep(2);
+              }}
+            >
+              Add Another Player
+            </button>
+            <button 
+              className="btn-primary" 
+              style={{ width: '100%', padding: '1rem', fontSize: '1rem', marginTop: '1rem', background: 'transparent', color: 'var(--text-muted)', border: 'none' }} 
+              onClick={() => navigate('/')}
+            >
+              Return to Home
+            </button>
           </div>
         );
       default: return null;
