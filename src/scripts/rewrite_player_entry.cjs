@@ -1,4 +1,5 @@
-import { useState } from 'react';
+const fs = require('fs');
+const content = `import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, UserPlus, Trophy, MapPin, Upload } from 'lucide-react';
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
@@ -108,7 +109,7 @@ export default function PlayerEntry() {
         if (formData.photoFile) {
           setUploadingPhoto(true);
           const ext = formData.photoFile.name.split('.').pop();
-          const fileName = `players/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+          const fileName = \`players/\${Date.now()}_\${Math.random().toString(36).substring(7)}.\${ext}\`;
           const storageRef = ref(storage, fileName);
           await uploadBytes(storageRef, formData.photoFile);
           finalPhotoURL = await getDownloadURL(storageRef);
@@ -455,7 +456,7 @@ export default function PlayerEntry() {
           </button>
           <div style={{ flex: 1 }}>
             <div style={{ height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
-              <div style={{ height: '100%', background: 'var(--primary)', width: `${(step / 4) * 100}%`, transition: 'width 0.3s' }} />
+              <div style={{ height: '100%', background: 'var(--primary)', width: \`\${(step / 4) * 100}%\`, transition: 'width 0.3s' }} />
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '5px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
               Step {step} of 4
@@ -481,3 +482,5 @@ export default function PlayerEntry() {
     </div>
   );
 }
+`;
+fs.writeFileSync('src/pages/PlayerEntry.jsx', content);
