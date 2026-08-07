@@ -7,6 +7,12 @@ import RostersModal from '../components/RostersModal';
 import OnboardingTour from '../components/OnboardingTour';
 
 export default function AuctionRoom() {
+  // Touch Handlers for Swipe Navigation
+  const touchStartRef = useRef(null);
+  const touchEndRef = useRef(null);
+  const touchStartY = useRef(null);
+  const touchEndY = useRef(null);
+
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const roomCode = searchParams.get('room');
@@ -387,11 +393,7 @@ export default function AuctionRoom() {
     );
   };
 
-  // Touch Handlers for Swipe Navigation
-  const touchStartRef = useRef(null);
-  const touchEndRef = useRef(null);
-  const touchStartY = useRef(null);
-  const touchEndY = useRef(null);
+
 
   const onTouchStart = (e) => {
     touchEndRef.current = null;
