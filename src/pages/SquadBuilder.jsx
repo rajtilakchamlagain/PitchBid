@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, BrainCircuit, Activity, Edit3, Save, CheckCircle2 } from 'lucide-react';
-import { doc, collection, query, getDocs, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, collection, query, getDocs, getDoc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 
 const FORMATIONS = {
@@ -205,9 +205,25 @@ export default function SquadBuilder() {
       setRoster(myPlayers);
       setGameType(detectedGame);
       
-      if (detectedGame === 'cricket') setFormation('T20 Standard');
-      else if (detectedGame === 'volleyball') setFormation('Standard 6');
-      else setFormation('4-2-3-1'); // Default modern football
+      try {
+        const tacticsDoc = await getDoc(doc(db, 'rooms', roomCode, 'tactics', myTeamName));
+        if (tacticsDoc.exists()) {
+          const data = tacticsDoc.data();
+          setFormation(data.formation || '4-2-3-1');
+          setPitchData(data.pitchData || {});
+          setCustomPositions(data.customPositions || {});
+          setIsCustomMode(data.isCustomMode || false);
+        } else {
+          if (detectedGame === 'cricket') setFormation('T20 Standard');
+          else if (detectedGame === 'volleyball') setFormation('Standard 6');
+          else setFormation('4-2-3-1');
+        }
+      } catch (err) {
+        console.error("Error loading tactics", err);
+        if (detectedGame === 'cricket') setFormation('T20 Standard');
+        else if (detectedGame === 'volleyball') setFormation('Standard 6');
+        else setFormation('4-2-3-1');
+      }
     };
     fetchRoster();
   }, [roomCode, myTeamName, navigate]);
@@ -300,6 +316,27 @@ export default function SquadBuilder() {
     return { attackScore, defenseScore, midfieldScore, report };
   };
 
+
+  const [isSaving, setIsSaving] = useState(false);
+  const handleSaveTactics = async () => {
+    if (!roomCode || !myTeamName) return;
+    setIsSaving(true);
+    try {
+      await setDoc(doc(db, 'rooms', roomCode, 'tactics', myTeamName), {
+        formation,
+        pitchData,
+        customPositions,
+        isCustomMode,
+        updatedAt: serverTimestamp()
+      });
+      // Optionally show a toast here, for now changing button text is enough
+      setTimeout(() => setIsSaving(false), 1000);
+    } catch (err) {
+      console.error("Failed to save tactics", err);
+      setIsSaving(false);
+    }
+  };
+
   const tactics = calculateTactics();
   const currentSlots = FORMATIONS[gameType]?.[formation] || [];
 
@@ -322,7 +359,7 @@ export default function SquadBuilder() {
           >
             <Edit3 size={16} /> Custom Layout
           </button>
-          <select 
+          <button className="btn-primary" onClick={handleSaveTactics} style={{ display: 'flex', gap: '8px', alignItems: 'center', padding: '8px 16px', background: isSaving ? 'var(--success)' : 'var(--primary)' }}>{isSaving ? <CheckCircle2 size={16} /> : <Save size={16} />} {isSaving ? 'Saved!' : 'Save Tactics'}</button><select 
             value={formation} 
             onChange={(e) => { setFormation(e.target.value); setCustomPositions({}); }}
             className="premium-input" 
@@ -488,4 +525,5 @@ export default function SquadBuilder() {
     </div>
   );
 }
+
 
