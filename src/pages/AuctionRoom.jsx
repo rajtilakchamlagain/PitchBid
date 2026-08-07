@@ -365,7 +365,7 @@ export default function AuctionRoom() {
     for (const p of unsoldPlayers) {
       await updateDoc(doc(db, 'rooms', roomCode, 'players', p.id), {
         status: 'pending',
-        basePrice: Math.max(100, Math.floor((p.basePrice || 500) / 2))
+        basePrice: Math.max(100, Math.floor((p.basePrice || 200) / 2))
       });
     }
 
