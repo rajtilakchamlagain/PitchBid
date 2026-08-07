@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Coins, Clock, AlertTriangle, Users, Shuffle, CheckCircle2, Info, X, Edit2, Save, Pause, Play, Heart, ThumbsDown, ThumbsUp, Flame, List, ShieldCheck, Undo2 } from 'lucide-react';
-import { doc, getDoc, getDocs, updateDoc, onSnapshot, collection, query, addDoc, serverTimestamp, orderBy, limit, where } from 'firebase/firestore';
+import { doc, getDoc, getDocs, updateDoc, onSnapshot, collection, query, addDoc, serverTimestamp, orderBy, limit, where, increment, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
 import RostersModal from '../components/RostersModal';
 import OnboardingTour from '../components/OnboardingTour';
@@ -92,7 +92,7 @@ export default function AuctionRoom() {
     const timer = setInterval(() => {
       if (roomData.timeLeft > 0) {
         updateDoc(doc(db, 'rooms', roomCode), {
-          timeLeft: roomData.timeLeft - 1
+          timeLeft: increment(-1)
         }).catch(e => {}); 
       } else if (roomData.timeLeft === 0) {
         clearInterval(timer);
@@ -210,7 +210,12 @@ export default function AuctionRoom() {
     const myRemaining = roomData.budgetPerTeam - mySpent;
 
     const current = roomData.currentBid || activePlayer.basePrice || 200;
-    const dynamicIncrement = Math.max(50, Math.round((roomData.budgetPerTeam * 0.005) / 10) * 10);
+    
+    let dynamicIncrement = Math.max(50, Math.round((roomData.budgetPerTeam * 0.005) / 10) * 10);
+    if (current >= 5000) dynamicIncrement = 500;
+    else if (current >= 2000) dynamicIncrement = 200;
+    else if (current >= 1000) dynamicIncrement = 100;
+
     const incrementAmt = customIncrement || dynamicIncrement;
     const newBid = current + incrementAmt;
     
@@ -320,6 +325,38 @@ export default function AuctionRoom() {
     await updateDoc(doc(db, 'rooms', roomCode), { status: newStatus });
   };
 
+  const handleRestartAuction = async () => {
+    if (!isHost) return;
+    const confirmRestart = window.confirm("WARNING: This will restart the entire auction! All sold players will be reset to pending and team budgets will be restored. Player data will NOT be erased. Are you absolutely sure?");
+    if (!confirmRestart) return;
+
+    try {
+      const batch = writeBatch(db);
+      players.forEach(p => {
+        batch.update(doc(db, 'rooms', roomCode, 'players', p.id), {
+          status: 'pending',
+          soldTo: null,
+          soldPrice: null
+        });
+      });
+      await batch.commit();
+
+      await updateDoc(doc(db, 'rooms', roomCode), {
+        status: 'waiting',
+        activePlayerId: null,
+        currentBid: 0,
+        highestBidder: 'None',
+        previousPlayerId: null,
+        timeLeft: 13
+      });
+      
+      setShowRoomInfo(false);
+    } catch (err) {
+      console.error("Error restarting auction", err);
+      alert("Failed to restart auction.");
+    }
+  };
+
   const handleRestartUnsoldLot = async () => {
     if (!isHost) return;
     const unsoldPlayers = players.filter(p => p.status === 'unsold');
@@ -417,6 +454,20 @@ export default function AuctionRoom() {
                 <h3 style={{ fontSize: '1.2rem', color: '#ff0080', margin: 0, letterSpacing: '0.1em' }}>{roomData.viewerCode}</h3>
               </div>
             </div>
+            
+            {isHost && (
+              <div style={{ marginTop: '1rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                <p style={{ color: '#ff0044', fontSize: '0.8rem', textTransform: 'uppercase', marginBottom: '10px', fontWeight: 'bold' }}>Danger Zone</p>
+                <button 
+                  className="btn-outline danger" 
+                  style={{ width: '100%', padding: '12px', borderColor: '#ff0044', color: '#ff0044' }} 
+                  onClick={handleRestartAuction}
+                >
+                  <AlertTriangle size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
+                  Restart Entire Auction
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -485,7 +536,12 @@ export default function AuctionRoom() {
       </div>
 
       {(() => {
-        const dynamicIncrement = Math.max(50, Math.round((roomData?.budgetPerTeam * 0.005) / 10) * 10);
+        let dynamicIncrement = Math.max(50, Math.round((roomData?.budgetPerTeam * 0.005) / 10) * 10);
+        const current = roomData?.currentBid || activePlayer?.basePrice || 200;
+        if (current >= 5000) dynamicIncrement = 500;
+        else if (current >= 2000) dynamicIncrement = 200;
+        else if (current >= 1000) dynamicIncrement = 100;
+
         const isWinning = roomData?.highestBidder === myTeamName;
         
         return (
