@@ -1,6 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+const fs = require('fs');
+
+const content = `import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, BrainCircuit, Activity, Edit3, Save, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, BrainCircuit, Activity, Edit3, Save } from 'lucide-react';
 import { doc, collection, query, getDocs, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
@@ -308,7 +310,7 @@ export default function SquadBuilder() {
       
       <header style={{ padding: '1.5rem', background: 'var(--panel-bg)', borderBottom: '1px solid var(--glass-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <button className="btn-outline" onClick={() => navigate(`/auction?room=${roomCode}`)} style={{ padding: '8px 12px', border: 'none' }}>
+          <button className="btn-outline" onClick={() => navigate(\`/auction?room=\${roomCode}\`)} style={{ padding: '8px 12px', border: 'none' }}>
             <ArrowLeft size={18} /> Back to Auction
           </button>
           <h1 style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>Manager: <span style={{ color: 'var(--primary)' }}>{myTeamName}</span></h1>
@@ -384,7 +386,7 @@ export default function SquadBuilder() {
                   draggable={isCustomMode}
                   onDragStart={(e) => handleDragStart(e, slot.id)}
                   style={{ 
-                    position: 'absolute', top: `${topPos}%`, left: `${leftPos}%`, transform: 'translate(-50%, -50%)',
+                    position: 'absolute', top: \`\${topPos}%\`, left: \`\${leftPos}%\`, transform: 'translate(-50%, -50%)',
                     display: 'flex', flexDirection: 'column', alignItems: 'center', 
                     cursor: isCustomMode ? 'grab' : 'pointer', zIndex: 10,
                     transition: isCustomMode ? 'none' : 'all 0.3s ease'
@@ -465,7 +467,7 @@ export default function SquadBuilder() {
                     }}
                     style={{ 
                       padding: '12px', background: isOnPitch ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.05)', 
-                      borderRadius: '8px', border: `1px solid ${isOnPitch ? 'var(--glass-border)' : 'rgba(255,255,255,0.1)'}`,
+                      borderRadius: '8px', border: \`1px solid \${isOnPitch ? 'var(--glass-border)' : 'rgba(255,255,255,0.1)'}\`,
                       cursor: (selectedSlot && !isOnPitch && !isCustomMode) ? 'pointer' : 'default',
                       opacity: isOnPitch ? 0.5 : 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                     }}
@@ -488,4 +490,6 @@ export default function SquadBuilder() {
     </div>
   );
 }
+`;
 
+fs.writeFileSync('src/scripts/rewrite_squad_builder.cjs', content);

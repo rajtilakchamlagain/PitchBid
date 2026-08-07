@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, BrainCircuit, Activity, Edit3, Save, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, BrainCircuit, Activity, Edit3, Save } from 'lucide-react';
 import { doc, collection, query, getDocs, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
@@ -488,4 +488,3 @@ export default function SquadBuilder() {
     </div>
   );
 }
-
