@@ -16,7 +16,8 @@ export default function OwnerEntry() {
     name: '',
     numOwners: 4,
     budget: 10000,
-    hostTeamName: ''
+    hostTeamName: '',
+    gameType: 'football'
   });
   
   const [generatedCodes, setGeneratedCodes] = useState({ owner: '', player: '', viewer: '' });
@@ -118,6 +119,7 @@ export default function OwnerEntry() {
         name: tournamentData.name,
         numOwners,
         budgetPerTeam: budgetNum,
+        gameType: tournamentData.gameType,
         status: 'waiting',
         createdAt: serverTimestamp(),
         activePlayerId: null,
@@ -248,6 +250,19 @@ export default function OwnerEntry() {
               value={tournamentData.hostTeamName}
               onChange={e => setTournamentData({...tournamentData, hostTeamName: e.target.value})}
             />
+          </div>
+
+          <div className="input-group">
+            <label>Tournament Sport</label>
+            <select 
+              className="premium-input" 
+              value={tournamentData.gameType}
+              onChange={e => setTournamentData({...tournamentData, gameType: e.target.value})}
+            >
+              <option value="football">Football</option>
+              <option value="cricket">Cricket</option>
+              <option value="volleyball">Volleyball</option>
+            </select>
           </div>
           
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>

@@ -87,6 +87,9 @@ export default function PlayerEntry() {
         return;
       }
       
+      // Update form data with room's game type
+      setFormData(prev => ({ ...prev, game: data.gameType || 'football' }));
+
       setValidatedRoomId(roomDoc.id);
       setRoomBudget(data.budgetPerTeam || 10000);
       setStep(2);
@@ -176,22 +179,6 @@ export default function PlayerEntry() {
           <div className="animate-fade-in delay-100" style={{ padding: '0 1rem' }}>
             <h2 style={{ fontSize: '1.8rem', marginBottom: '1.5rem', textAlign: 'center' }}>Player Registration</h2>
             
-            <div className="input-group">
-              <label>Select Game</label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
-                {['football', 'cricket', 'volleyball'].map(game => (
-                  <button 
-                    key={game}
-                    className={formData.game === game ? "btn-primary" : "btn-outline"}
-                    style={{ padding: '10px 5px', fontSize: '0.9rem', textTransform: 'capitalize' }}
-                    onClick={() => setFormData({...formData, game})}
-                  >
-                    {game}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             <div className="input-group" style={{ marginTop: '2rem' }}>
               <label>Player Entry Code</label>
               <input 
