@@ -94,7 +94,7 @@ export default function ViewerRoom() {
   const soldPlayers = players.filter(p => p.status === 'sold');
 
   // Check Auction Finished Status
-  const isAuctionFinished = roomData && pendingPlayers.length === 0 && unsoldPlayers.length === 0 && !roomData.activePlayerId && players.length > 0;
+  const isAuctionFinished = roomData && pendingPlayers.length === 0 && !roomData.activePlayerId && players.length > 0;
 
   useEffect(() => {
     if (isAuctionFinished && !hasFinishedTriggered) {

@@ -415,7 +415,7 @@ export default function AuctionRoom() {
   const pendingPlayers = players.filter(p => p.status === 'pending');
   const unsoldPlayers = players.filter(p => p.status === 'unsold');
   const soldPlayers = players.filter(p => p.status === 'sold');
-  const isAuctionFinished = pendingPlayers.length === 0 && unsoldPlayers.length === 0 && !activePlayer && players.length > 0;
+  const isAuctionFinished = pendingPlayers.length === 0 && !activePlayer && players.length > 0;
 
   const me = roomData.owners?.find(o => o.name === myTeamName);
   const isMyReady = me?.isReady;
