@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Coins, Clock, AlertTriangle, Users, Shuffle, CheckCircle2, Info, X, Edit2, Save, Pause, Play, Heart, ThumbsDown, ThumbsUp, Flame, List, ShieldCheck, Undo2 } from 'lucide-react';
+import { ArrowLeft, Coins, Clock, AlertTriangle, Users, Shuffle, CheckCircle2, Info, X, Edit2, Save, Pause, Play, Heart, ThumbsDown, ThumbsUp, Flame, List, ShieldCheck, Undo2, Trophy } from 'lucide-react';
 import { doc, getDoc, getDocs, updateDoc, onSnapshot, collection, query, addDoc, serverTimestamp, orderBy, limit, where, increment, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
 import RostersModal from '../components/RostersModal';
@@ -413,8 +413,9 @@ export default function AuctionRoom() {
   if (!roomData) return <div className="min-h-screen flex-center"><h2 className="text-gradient pulse-gold">Loading Broadcast...</h2></div>;
 
   const pendingPlayers = players.filter(p => p.status === 'pending');
-  const soldPlayers = players.filter(p => p.status === 'sold');
   const unsoldPlayers = players.filter(p => p.status === 'unsold');
+  const soldPlayers = players.filter(p => p.status === 'sold');
+  const isAuctionFinished = pendingPlayers.length === 0 && unsoldPlayers.length === 0 && !activePlayer && players.length > 0;
 
   const me = roomData.owners?.find(o => o.name === myTeamName);
   const isMyReady = me?.isReady;
@@ -883,8 +884,28 @@ export default function AuctionRoom() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1 }}>
-                  <AlertTriangle size={64} style={{ marginBottom: '1.5rem', opacity: 0.2, color: 'var(--text-muted)' }} />
-                  <h3 style={{ color: 'var(--text-muted)', fontWeight: '400', letterSpacing: '0.05em' }}>Awaiting Next Player...</h3>
+                  {isAuctionFinished ? (
+                    <>
+                      <div className="pulse-gold" style={{ marginBottom: '1.5rem', width: '80px', height: '80px', background: 'rgba(255,215,0,0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Trophy size={40} color="#ffd700" />
+                      </div>
+                      <h3 style={{ color: '#ffd700', fontSize: '2rem', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '2px', margin: 0, textShadow: '0 0 10px rgba(255,215,0,0.5)' }}>Auction Concluded</h3>
+                      <p style={{ color: 'var(--text-muted)', marginTop: '10px' }}>All players have been drafted.</p>
+                      
+                      <button 
+                        className="btn-primary" 
+                        style={{ marginTop: '2rem', display: 'flex', alignItems: 'center', gap: '8px' }}
+                        onClick={() => setIsRostersOpen(true)}
+                      >
+                        <List size={18} /> View Final Squads
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle size={64} style={{ marginBottom: '1.5rem', opacity: 0.2, color: 'var(--text-muted)' }} />
+                      <h3 style={{ color: 'var(--text-muted)', fontWeight: '400', letterSpacing: '0.05em' }}>Awaiting Next Player...</h3>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -990,3 +1011,4 @@ export default function AuctionRoom() {
     </div>
   );
 }
+
