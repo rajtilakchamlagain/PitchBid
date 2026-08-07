@@ -291,8 +291,9 @@ export default function AuctionRoom() {
   const handleMarkUnsold = async () => {
     if (!activePlayer) return;
     try {
+      const newStatus = activePlayer.isRestarted ? 'permanently_unsold' : 'unsold';
       await updateDoc(doc(db, 'rooms', roomCode, 'players', activePlayer.id), {
-        status: 'unsold'
+        status: newStatus
       });
       await updateDoc(doc(db, 'rooms', roomCode), {
         activePlayerId: null,
@@ -372,6 +373,7 @@ export default function AuctionRoom() {
     for (const p of unsoldPlayers) {
       await updateDoc(doc(db, 'rooms', roomCode, 'players', p.id), {
         status: 'pending',
+        isRestarted: true,
         basePrice: Math.max(100, Math.floor((p.basePrice || 200) / 2))
       });
     }
@@ -415,7 +417,7 @@ export default function AuctionRoom() {
   const pendingPlayers = players.filter(p => p.status === 'pending');
   const unsoldPlayers = players.filter(p => p.status === 'unsold');
   const soldPlayers = players.filter(p => p.status === 'sold');
-  const isAuctionFinished = pendingPlayers.length === 0 && !activePlayer && players.length > 0;
+  const isAuctionFinished = pendingPlayers.length === 0 && unsoldPlayers.length === 0 && !activePlayer && players.length > 0;
 
   const me = roomData.owners?.find(o => o.name === myTeamName);
   const isMyReady = me?.isReady;
