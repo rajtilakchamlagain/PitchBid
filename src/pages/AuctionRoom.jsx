@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Coins, Clock, AlertTriangle, Users, Shuffle, CheckCircle2, Info, X, Edit2, Save, Pause, Play, Heart, ThumbsDown, ThumbsUp, Flame, List, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Coins, Clock, AlertTriangle, Users, Shuffle, CheckCircle2, Info, X, Edit2, Save, Pause, Play, Heart, ThumbsDown, ThumbsUp, Flame, List, ShieldCheck, Undo2 } from 'lucide-react';
 import { doc, getDoc, getDocs, updateDoc, onSnapshot, collection, query, addDoc, serverTimestamp, orderBy, limit, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import RostersModal from '../components/RostersModal';
@@ -242,7 +242,8 @@ export default function AuctionRoom() {
         activePlayerId: playerId,
         currentBid: p?.basePrice || 200,
         highestBidder: 'None',
-        timeLeft: 13
+        timeLeft: 13,
+        previousPlayerId: null
       });
     } catch (err) {
       console.error("Error sending to block", err);
@@ -267,7 +268,8 @@ export default function AuctionRoom() {
       await updateDoc(doc(db, 'rooms', roomCode), {
         activePlayerId: null,
         currentBid: 0,
-        highestBidder: 'None'
+        highestBidder: 'None',
+        previousPlayerId: activePlayer.id
       });
     } catch (err) {
       console.error(err);
@@ -283,11 +285,39 @@ export default function AuctionRoom() {
       await updateDoc(doc(db, 'rooms', roomCode), {
         activePlayerId: null,
         currentBid: 0,
-        highestBidder: 'None'
+        highestBidder: 'None',
+        previousPlayerId: activePlayer.id
       });
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const handleUndoLastPlayer = async () => {
+    if (!isHost || !roomData.previousPlayerId) return;
+    try {
+      await updateDoc(doc(db, 'rooms', roomCode, 'players', roomData.previousPlayerId), {
+        status: 'pending',
+        soldTo: null,
+        soldPrice: null
+      });
+      const p = players.find(x => x.id === roomData.previousPlayerId);
+      await updateDoc(doc(db, 'rooms', roomCode), {
+        activePlayerId: roomData.previousPlayerId,
+        currentBid: p?.basePrice || 200,
+        highestBidder: 'None',
+        timeLeft: 13,
+        previousPlayerId: null
+      });
+    } catch (err) {
+      console.error("Error undoing last player", err);
+    }
+  };
+
+  const handleHostPause = async () => {
+    if (!isHost) return;
+    const newStatus = roomData.status === 'live' ? 'break' : 'live';
+    await updateDoc(doc(db, 'rooms', roomCode), { status: newStatus });
   };
 
   const handleRestartUnsoldLot = async () => {
@@ -557,6 +587,17 @@ export default function AuctionRoom() {
 
           {isHost && (
             <button 
+              className={`btn-outline ${roomData.status === 'break' ? '' : 'danger'}`}
+              onClick={handleHostPause}
+              style={{ padding: '8px 16px', display: 'flex', gap: '8px', alignItems: 'center' }}
+            >
+              {roomData.status === 'break' ? <Play size={14} /> : <Pause size={14} />}
+              {roomData.status === 'break' ? 'Resume' : 'Host Pause'}
+            </button>
+          )}
+
+          {isHost && (
+            <button 
               className="btn-outline" 
               onClick={() => setShowRoomInfo(true)}
               style={{ padding: '8px 16px', display: 'flex', gap: '8px', alignItems: 'center' }}
@@ -603,7 +644,17 @@ export default function AuctionRoom() {
               style={{ width: '100%', marginBottom: '1.5rem' }}
               onClick={handleRestartUnsoldLot}
             >
-              Restart Unsold Lot
+              <Shuffle size={16} /> Restart Unsold Lot
+            </button>
+          )}
+
+          {isHost && roomData.previousPlayerId && (
+            <button 
+              className="btn-outline danger" 
+              style={{ width: '100%', marginBottom: '1.5rem', borderColor: '#ff0044', color: '#ff0044', display: 'flex', justifyContent: 'center', gap: '10px' }}
+              onClick={handleUndoLastPlayer}
+            >
+              <Undo2 size={16} /> Undo Last Action
             </button>
           )}
 

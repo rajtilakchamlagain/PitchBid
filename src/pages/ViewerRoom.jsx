@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Coins, Clock, AlertTriangle, Users, MessageCircle, Send, List } from 'lucide-react';
+import { ArrowLeft, Coins, Clock, AlertTriangle, Users, MessageCircle, Send, List, Play } from 'lucide-react';
 import { doc, onSnapshot, collection, query, orderBy, addDoc, serverTimestamp, limit } from 'firebase/firestore';
 import { db } from '../firebase';
 import RostersModal from '../components/RostersModal';
