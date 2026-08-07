@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+const fs = require('fs');
+const content = `import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Coins, Clock, AlertTriangle, Users, MessageCircle, Send, List, Play, Activity, Target, Shield, LayoutDashboard, MonitorPlay, Sparkles } from 'lucide-react';
 import { doc, onSnapshot, collection, query, orderBy, addDoc, serverTimestamp, limit } from 'firebase/firestore';
@@ -330,7 +331,7 @@ export default function ViewerRoom() {
       <RostersModal isOpen={isRostersOpen} onClose={() => setIsRostersOpen(false)} roomData={roomData} players={players} />
 
       {reactions.map(r => (
-        <div key={r.id} className="float-emoji" style={{ left: `${r.x}%` }}>{r.emoji}</div>
+        <div key={r.id} className="float-emoji" style={{ left: \`\${r.x}%\` }}>{r.emoji}</div>
       ))}
 
       {showSoldStamp && (
@@ -379,7 +380,7 @@ export default function ViewerRoom() {
             padding: '8px 16px', 
             borderRadius: '8px', 
             color: roomData.status === 'live' ? '#ff0044' : roomData.status === 'break' ? '#ffd700' : 'var(--secondary)', 
-            display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', border: `1px solid ${roomData.status === 'live' ? 'rgba(255,0,68,0.3)' : 'rgba(255,255,255,0.1)'}`
+            display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', border: \`1px solid \${roomData.status === 'live' ? 'rgba(255,0,68,0.3)' : 'rgba(255,255,255,0.1)'}\`
           }}>
             <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: roomData.status === 'live' ? '#ff0044' : roomData.status === 'break' ? '#ffd700' : 'var(--secondary)', animation: roomData.status === 'live' ? 'pulse 1s infinite' : 'none' }} />
             {roomData.status.toUpperCase()}
@@ -389,7 +390,7 @@ export default function ViewerRoom() {
 
       <div className="dashboard-grid">
         
-        <div className={`glass-panel mobile-tab-content ${mobileTab === 'left' ? 'active' : ''}`} style={{ display: 'flex', flexDirection: 'column' }}>
+        <div className={\`glass-panel mobile-tab-content \${mobileTab === 'left' ? 'active' : ''}\`} style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--glass-border)' }}>
             <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)' }}>
               <MessageCircle size={16} /> Live Chat
@@ -404,7 +405,7 @@ export default function ViewerRoom() {
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px', marginLeft: '4px', marginRight: '4px' }}>{msg.sender}</span>
                   <div style={{ 
                     background: msg.sender === viewerName ? 'rgba(0, 212, 255, 0.2)' : 'rgba(255,255,255,0.05)', 
-                    padding: '10px 14px', borderRadius: '12px', border: `1px solid ${msg.sender === viewerName ? 'rgba(0, 212, 255, 0.3)' : 'rgba(255,255,255,0.1)'}`,
+                    padding: '10px 14px', borderRadius: '12px', border: \`1px solid \${msg.sender === viewerName ? 'rgba(0, 212, 255, 0.3)' : 'rgba(255,255,255,0.1)'}\`,
                     maxWidth: '85%', wordBreak: 'break-word', fontSize: '0.95rem'
                   }}>
                     {msg.text}
@@ -428,7 +429,7 @@ export default function ViewerRoom() {
           </form>
         </div>
 
-        <div className={`glass-panel mobile-tab-content ${mobileTab === 'center' ? 'active' : ''}`} style={{ display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+        <div className={\`glass-panel mobile-tab-content \${mobileTab === 'center' ? 'active' : ''}\`} style={{ display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
           
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: '10px', background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)', zIndex: 10, display: 'flex', justifyContent: 'center', gap: '2rem', borderBottom: '1px solid var(--glass-border)' }}>
             <div style={{ textAlign: 'center' }}>
@@ -440,7 +441,7 @@ export default function ViewerRoom() {
             <div style={{ width: '1px', background: 'var(--glass-border)' }} />
             <div style={{ textAlign: 'center' }}>
               <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Current Bid</p>
-              <div className={`text-gradient-primary ${pulseBid ? 'pulse-gold' : ''}`} style={{ fontWeight: 'bold', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+              <div className={\`text-gradient-primary \${pulseBid ? 'pulse-gold' : ''}\`} style={{ fontWeight: 'bold', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
                 <Coins size={16} /> {roomData.currentBid || 0}
               </div>
             </div>
@@ -451,7 +452,7 @@ export default function ViewerRoom() {
               <div className="player-card animate-fade-in" style={{ width: '100%', maxWidth: '350px' }}>
                 
                 {activePlayer.photoURL ? (
-                  <div style={{ width: '100%', height: '200px', background: `url(${activePlayer.photoURL}) center/cover`, borderRadius: '12px', marginBottom: '1rem', border: '1px solid rgba(255,255,255,0.1)' }} />
+                  <div style={{ width: '100%', height: '200px', background: \`url(\${activePlayer.photoURL}) center/cover\`, borderRadius: '12px', marginBottom: '1rem', border: '1px solid rgba(255,255,255,0.1)' }} />
                 ) : (
                   <div style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)', height: '120px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem', border: '1px solid rgba(255,255,255,0.1)' }}>
                     <h2 style={{ fontSize: '3rem', margin: 0, opacity: 0.5, letterSpacing: '4px' }}>{activePlayer.realName.substring(0,2).toUpperCase()}</h2>
@@ -459,7 +460,7 @@ export default function ViewerRoom() {
                 )}
                 
                 <h2 style={{ fontSize: '2rem', marginBottom: '5px', textAlign: 'center' }}>{activePlayer.realName}</h2>
-                <p style={{ color: 'var(--text-muted)', textAlign: 'center', fontSize: '0.9rem', marginBottom: '1.5rem', letterSpacing: '2px' }}>{activePlayer.nickName ? `"${activePlayer.nickName}"` : 'PLAYER'}</p>
+                <p style={{ color: 'var(--text-muted)', textAlign: 'center', fontSize: '0.9rem', marginBottom: '1.5rem', letterSpacing: '2px' }}>{activePlayer.nickName ? \`"\${activePlayer.nickName}"\` : 'PLAYER'}</p>
                 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   {activePlayer.game === 'cricket' ? (
@@ -508,7 +509,7 @@ export default function ViewerRoom() {
           </div>
         </div>
 
-        <div className={`glass-panel mobile-tab-content ${mobileTab === 'right' ? 'active' : ''}`} style={{ display: 'flex', flexDirection: 'column' }}>
+        <div className={\`glass-panel mobile-tab-content \${mobileTab === 'right' ? 'active' : ''}\`} style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--glass-border)' }}>
             <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)' }}>
               <Play size={16} /> Fan Zone
@@ -554,10 +555,12 @@ export default function ViewerRoom() {
       
       {/* Mobile Swipe Indicators */}
       <div className="mobile-swipe-indicators">
-        <div className={`indicator ${mobileTab === 'left' ? 'active' : ''}`} />
-        <div className={`indicator ${mobileTab === 'center' ? 'active' : ''}`} />
-        <div className={`indicator ${mobileTab === 'right' ? 'active' : ''}`} />
+        <div className={\`indicator \${mobileTab === 'left' ? 'active' : ''}\`} />
+        <div className={\`indicator \${mobileTab === 'center' ? 'active' : ''}\`} />
+        <div className={\`indicator \${mobileTab === 'right' ? 'active' : ''}\`} />
       </div>
     </div>
   );
 }
+`;
+fs.writeFileSync('src/scripts/rewrite_viewer_room.cjs', content);

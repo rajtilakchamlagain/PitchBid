@@ -35,6 +35,7 @@ export default function AuctionRoom() {
   const [pulseBid, setPulseBid] = useState(false);
   const prevActivePlayerRef = useRef(null);
   const [showSoldStamp, setShowSoldStamp] = useState(false);
+  const [showUnsoldStamp, setShowUnsoldStamp] = useState(false);
   const [soldToText, setSoldToText] = useState('');
 
   const myTeamName = localStorage.getItem('pitchbid_team');
@@ -114,14 +115,20 @@ export default function AuctionRoom() {
         const ap = players.find(p => p.id === roomData.activePlayerId);
         if (ap) setActivePlayer(ap);
         setShowSoldStamp(false); // New player on block
+        setShowUnsoldStamp(false);
       } else {
         // Did we just sell someone?
         if (prevActivePlayerRef.current && roomData.activePlayerId === null && roomData.status === 'live') {
           const justSoldPlayer = players.find(p => p.id === prevActivePlayerRef.current);
-          if (justSoldPlayer && justSoldPlayer.status === 'sold') {
-             setSoldToText(justSoldPlayer.soldTo);
-             setShowSoldStamp(true);
-             setTimeout(() => setShowSoldStamp(false), 2000);
+          if (justSoldPlayer) {
+            if (justSoldPlayer.status === 'sold') {
+              setSoldToText(justSoldPlayer.soldTo);
+              setShowSoldStamp(true);
+              setTimeout(() => setShowSoldStamp(false), 2000);
+            } else if (justSoldPlayer.status === 'unsold') {
+              setShowUnsoldStamp(true);
+              setTimeout(() => setShowUnsoldStamp(false), 2000);
+            }
           }
 
           // Auto-Random Next Player after delay
@@ -598,6 +605,12 @@ export default function AuctionRoom() {
         <div className="stamp-sold">
           SOLD TO<br/>
           <span style={{ fontSize: '2rem', color: '#fff', textShadow: 'none' }}>{soldToText}</span>
+        </div>
+      )}
+
+      {showUnsoldStamp && (
+        <div className="stamp-unsold">
+          UNSOLD
         </div>
       )}
       
