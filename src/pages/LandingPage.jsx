@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
-import { Trophy, Users, Eye, ArrowRight, ShieldCheck, Zap, BarChart3 } from 'lucide-react';
+import { Trophy, Users, Eye, ArrowRight, ShieldCheck, Zap, BarChart3, Instagram, Linkedin, Github } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -207,6 +208,79 @@ export default function LandingPage() {
         </div>
 
       </div>
+
+      {/* About the Creator Section */}
+      <div style={{ maxWidth: '800px', margin: '0 auto 6rem', padding: '0 2rem' }}>
+        <motion.div 
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          style={{ 
+            background: 'linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%)', 
+            borderRadius: '32px', 
+            padding: '3rem', 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            textAlign: 'center',
+            border: '1px solid rgba(0,0,0,0.05)',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.04)'
+          }}
+        >
+          <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
+            <div style={{ position: 'absolute', top: -5, left: -5, right: -5, bottom: -5, background: 'linear-gradient(135deg, #0055ff, #00e5ff, #ff0080)', borderRadius: '50%', zIndex: 0, animation: 'spin 4s linear infinite' }} />
+            <img src="/raju.jpeg" alt="Raj Tilak" style={{ width: '120px', height: '120px', borderRadius: '50%', objectFit: 'cover', position: 'relative', zIndex: 1, border: '4px solid #fff' }} />
+          </div>
+          
+          <h2 style={{ fontSize: '2rem', fontWeight: '900', marginBottom: '0.5rem', letterSpacing: '-0.02em' }}>Developed by Raj Tilak</h2>
+          <p style={{ color: '#666', fontSize: '1.1rem', lineHeight: '1.6', maxWidth: '500px', marginBottom: '2rem' }}>
+            Passionate about crafting premium, high-performance web experiences. Building the future of sports and tournament management.
+          </p>
+
+          <div style={{ display: 'flex', gap: '1.5rem' }}>
+            <motion.a 
+              href="https://instagram.com/raj.tilak__" 
+              target="_blank" 
+              rel="noreferrer"
+              whileHover={{ scale: 1.1, y: -5 }}
+              whileTap={{ scale: 0.95 }}
+              style={{ width: '50px', height: '50px', borderRadius: '14px', background: 'linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 10px 20px rgba(220, 39, 67, 0.2)' }}
+            >
+              <Instagram size={24} />
+            </motion.a>
+            
+            <motion.a 
+              href="https://linkedin.com/in/rajtilak" 
+              target="_blank" 
+              rel="noreferrer"
+              whileHover={{ scale: 1.1, y: -5 }}
+              whileTap={{ scale: 0.95 }}
+              style={{ width: '50px', height: '50px', borderRadius: '14px', background: '#0077b5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 10px 20px rgba(0, 119, 181, 0.2)' }}
+            >
+              <Linkedin size={24} />
+            </motion.a>
+            
+            <motion.a 
+              href="https://github.com/rajtilakchamlagain" 
+              target="_blank" 
+              rel="noreferrer"
+              whileHover={{ scale: 1.1, y: -5 }}
+              whileTap={{ scale: 0.95 }}
+              style={{ width: '50px', height: '50px', borderRadius: '14px', background: '#333', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 10px 20px rgba(0, 0, 0, 0.2)' }}
+            >
+              <Github size={24} />
+            </motion.a>
+          </div>
+        </motion.div>
+      </div>
+      
+      <style>{`
+        @keyframes spin {
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+
     </div>
   );
 }
