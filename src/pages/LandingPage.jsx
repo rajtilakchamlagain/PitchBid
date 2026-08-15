@@ -230,10 +230,10 @@ export default function LandingPage() {
         >
           <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
             <div style={{ position: 'absolute', top: -5, left: -5, right: -5, bottom: -5, background: 'linear-gradient(135deg, #0055ff, #00e5ff, #ff0080)', borderRadius: '50%', zIndex: 0, animation: 'spin 4s linear infinite' }} />
-            <img src="/raju.jpeg" alt="Raj Tilak" style={{ width: '120px', height: '120px', borderRadius: '50%', objectFit: 'cover', position: 'relative', zIndex: 1, border: '4px solid #fff' }} />
+            <img src="/raju.jpeg" alt="Rajtilak Chamlagain" style={{ width: '120px', height: '120px', borderRadius: '50%', objectFit: 'cover', position: 'relative', zIndex: 1, border: '4px solid #fff' }} />
           </div>
           
-          <h2 style={{ fontSize: '2rem', fontWeight: '900', marginBottom: '0.5rem', letterSpacing: '-0.02em' }}>Developed by Raj Tilak</h2>
+          <h2 style={{ fontSize: '2rem', fontWeight: '900', marginBottom: '0.5rem', letterSpacing: '-0.02em' }}>Developed by Rajtilak Chamlagain</h2>
           <p style={{ color: '#666', fontSize: '1.1rem', lineHeight: '1.6', maxWidth: '500px', marginBottom: '2rem' }}>
             Passionate about crafting premium, high-performance web experiences. Building the future of sports and tournament management.
           </p>
