@@ -11,6 +11,8 @@ import ErrorBoundary from './components/ErrorBoundary';
 import ChessOwnerEntry from './pages/ChessOwnerEntry';
 import ChessPlayerEntry from './pages/ChessPlayerEntry';
 import ChessDashboard from './pages/ChessDashboard';
+import ChessViewerEntry from './pages/ChessViewerEntry';
+import ChessViewerRoom from './pages/ChessViewerRoom';
 
 function App() {
   return (
@@ -30,6 +32,8 @@ function App() {
             <Route path="/chess-owner-entry" element={<ChessOwnerEntry />} />
             <Route path="/chess-player-entry" element={<ChessPlayerEntry />} />
             <Route path="/chess-dashboard" element={<ChessDashboard />} />
+            <Route path="/chess-viewer-entry" element={<ChessViewerEntry />} />
+            <Route path="/chess-viewer-room" element={<ChessViewerRoom />} />
           </Routes>
         </div>
       </ErrorBoundary>

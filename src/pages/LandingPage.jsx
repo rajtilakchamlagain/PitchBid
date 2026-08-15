@@ -164,6 +164,18 @@ export default function LandingPage() {
           >
             <Users size={18} /> Join as Player
           </button>
+          
+          <button 
+            onClick={() => navigate('/chess-viewer-entry')}
+            style={{ 
+              background: 'transparent', color: '#666', padding: '1rem 1.5rem', borderRadius: '12px', fontSize: '1.05rem', fontWeight: '600', border: 'none', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.color = '#000'}
+            onMouseLeave={e => e.currentTarget.style.color = '#666'}
+          >
+            <Eye size={18} /> Watch Live <ArrowRight size={16} />
+          </button>
         </div>
       </div>
 
