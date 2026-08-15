@@ -339,6 +339,77 @@ export default function ChessDashboard() {
     }
   };
 
+  const undoResult = async (roundId, pairingIndex) => {
+    try {
+      const roundDoc = rounds.find(r => r.id === roundId);
+      if (!roundDoc) return;
+      
+      const pairing = roundDoc.pairings[pairingIndex];
+      const result = pairing.result;
+      if (result === 'pending') return; 
+      
+      const updatedPairings = roundDoc.pairings.map(p => ({...p}));
+      updatedPairings[pairingIndex].result = 'pending';
+      
+      const batch = writeBatch(db);
+      const roundRef = doc(db, 'chess_tournaments', roomCode, 'rounds', roundId);
+      
+      if (roundDoc.status === 'completed') {
+        batch.update(roundRef, { pairings: updatedPairings, status: 'published' });
+      } else {
+        batch.update(roundRef, { pairings: updatedPairings });
+      }
+      
+      const p1Ref = doc(db, 'chess_tournaments', roomCode, 'players', pairing.player1);
+      const p2Ref = doc(db, 'chess_tournaments', roomCode, 'players', pairing.player2);
+      
+      const p1 = players.find(p => p.id === pairing.player1);
+      const p2 = players.find(p => p.id === pairing.player2);
+      
+      const isKnockout = roundDoc.format === 'knockout';
+      
+      if (result === '1-0' || result === '1-0 (Walkover)') {
+        batch.update(p1Ref, { 
+          wins: (p1.wins || 0) - 1, 
+          whitePlayed: pairing.player1Color === 'white' ? (p1.whitePlayed || 0) - 1 : (p1.whitePlayed || 0), 
+          blackPlayed: pairing.player1Color === 'black' ? (p1.blackPlayed || 0) - 1 : (p1.blackPlayed || 0) 
+        });
+        batch.update(p2Ref, { 
+          whitePlayed: pairing.player2Color === 'white' ? (p2.whitePlayed || 0) - 1 : (p2.whitePlayed || 0), 
+          blackPlayed: pairing.player2Color === 'black' ? (p2.blackPlayed || 0) - 1 : (p2.blackPlayed || 0),
+          ...(isKnockout ? { withdrawn: false } : {})
+        });
+      } else if (result === '0-1' || result === '0-1 (Walkover)') {
+        batch.update(p2Ref, { 
+          wins: (p2.wins || 0) - 1, 
+          whitePlayed: pairing.player2Color === 'white' ? (p2.whitePlayed || 0) - 1 : (p2.whitePlayed || 0), 
+          blackPlayed: pairing.player2Color === 'black' ? (p2.blackPlayed || 0) - 1 : (p2.blackPlayed || 0) 
+        });
+        batch.update(p1Ref, { 
+          whitePlayed: pairing.player1Color === 'white' ? (p1.whitePlayed || 0) - 1 : (p1.whitePlayed || 0), 
+          blackPlayed: pairing.player1Color === 'black' ? (p1.blackPlayed || 0) - 1 : (p1.blackPlayed || 0),
+          ...(isKnockout ? { withdrawn: false } : {})
+        });
+      } else if (result === '0.5-0.5') {
+        batch.update(p1Ref, { 
+          wins: (p1.wins || 0) - 0.5, 
+          whitePlayed: pairing.player1Color === 'white' ? (p1.whitePlayed || 0) - 1 : (p1.whitePlayed || 0), 
+          blackPlayed: pairing.player1Color === 'black' ? (p1.blackPlayed || 0) - 1 : (p1.blackPlayed || 0) 
+        });
+        batch.update(p2Ref, { 
+          wins: (p2.wins || 0) - 0.5, 
+          whitePlayed: pairing.player2Color === 'white' ? (p2.whitePlayed || 0) - 1 : (p2.whitePlayed || 0), 
+          blackPlayed: pairing.player2Color === 'black' ? (p2.blackPlayed || 0) - 1 : (p2.blackPlayed || 0) 
+        });
+      }
+      
+      await batch.commit();
+    } catch (err) {
+      console.error(err);
+      alert("Error undoing result");
+    }
+  };
+
   const handleSwapClick = async (roundId, pairingIndex, playerNum, playerId, playerName, playerColor) => {
     if (!selectedForSwap) {
       setSelectedForSwap({ pairingIndex, playerNum, playerId, playerName, playerColor, roundId });
@@ -353,7 +424,7 @@ export default function ChessDashboard() {
         return;
       }
       const roundDoc = rounds.find(r => r.id === roundId);
-      const updatedPairings = [...roundDoc.pairings];
+      const updatedPairings = roundDoc.pairings.map(p => ({...p}));
 
       const pA = { id: selectedForSwap.playerId, name: selectedForSwap.playerName };
       const pB = { id: playerId, name: playerName };
@@ -759,8 +830,13 @@ export default function ChessDashboard() {
                   )}
 
                   {pairing.result !== 'pending' && (
-                    <div style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '1.2rem', fontWeight: '900', color: '#fff' }}>
-                      Result: <span style={{ color: '#10b981' }}>{pairing.result}</span>
+                    <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#fff' }}>
+                        Result: <span style={{ color: '#10b981' }}>{pairing.result}</span>
+                      </div>
+                      <button onClick={() => undoResult(activeRoundData.id, idx)} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#888', padding: '6px 12px', borderRadius: '6px', fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <RotateCcw size={14} /> Undo Result
+                      </button>
                     </div>
                   )}
                 </div>
