@@ -203,29 +203,55 @@ export default function ChessDashboard() {
         // Sort active players strictly by points
         let pool = [...activePlayers].sort((a, b) => (b.wins || 0) - (a.wins || 0));
         
-        while (pool.length >= 2) {
-          const p1 = pool.shift();
-          
-          // Find closest opponent who hasn't played p1
-          let opponentIndex = 0; 
-          for (let i = 0; i < pool.length; i++) {
-            if (!history[p1.id].has(pool[i].id)) {
-              opponentIndex = i;
-              break;
+        // Recursive Backtracking to find a perfect matching with NO duplicate history
+        const findValidPairings = (remainingPool, currentPairs) => {
+          if (remainingPool.length <= 1) {
+            return { success: true, pairs: currentPairs, remainder: remainingPool };
+          }
+          const p1 = remainingPool[0];
+          for (let i = 1; i < remainingPool.length; i++) {
+            const p2 = remainingPool[i];
+            if (!history[p1.id].has(p2.id)) {
+              const newRemaining = [...remainingPool];
+              newRemaining.splice(i, 1);
+              newRemaining.splice(0, 1);
+              const result = findValidPairings(newRemaining, [...currentPairs, [p1, p2]]);
+              if (result.success) return result;
             }
           }
-          
-          const p2 = pool.splice(opponentIndex, 1)[0];
-          
-          let p1Color = 'white'; let p2Color = 'black';
-          if ((p1.whitePlayed || 0) > (p1.blackPlayed || 0) && (p2.blackPlayed || 0) >= (p2.whitePlayed || 0)) {
-            p1Color = 'black'; p2Color = 'white';
-          }
-          pairings.push({ player1: p1.id, player1Name: p1.name, player1Color: p1Color, player2: p2.id, player2Name: p2.name, player2Color: p2Color, result: 'pending', matchType: format === 'staircase' ? 'Round Robin' : 'Swiss' });
-        }
-        
-        if (pool.length === 1) {
-          byePlayers.push(pool.shift());
+          return { success: false };
+        };
+
+        const matchResult = findValidPairings(pool, []);
+
+        if (matchResult.success) {
+           matchResult.pairs.forEach(pair => {
+             const p1 = pair[0]; const p2 = pair[1];
+             let p1Color = 'white'; let p2Color = 'black';
+             if ((p1.whitePlayed || 0) > (p1.blackPlayed || 0) && (p2.blackPlayed || 0) >= (p2.whitePlayed || 0)) {
+               p1Color = 'black'; p2Color = 'white';
+             }
+             pairings.push({ player1: p1.id, player1Name: p1.name, player1Color: p1Color, player2: p2.id, player2Name: p2.name, player2Color: p2Color, result: 'pending', matchType: format === 'staircase' ? 'Round Robin' : 'Swiss' });
+           });
+           if (matchResult.remainder.length === 1) byePlayers.push(matchResult.remainder[0]);
+        } else {
+           // Fallback to Greedy if mathematically impossible (e.g. late stages of a Swiss)
+           while (pool.length >= 2) {
+             const p1 = pool.shift();
+             let opponentIndex = 0; 
+             for (let i = 0; i < pool.length; i++) {
+               if (!history[p1.id].has(pool[i].id)) {
+                 opponentIndex = i; break;
+               }
+             }
+             const p2 = pool.splice(opponentIndex, 1)[0];
+             let p1Color = 'white'; let p2Color = 'black';
+             if ((p1.whitePlayed || 0) > (p1.blackPlayed || 0) && (p2.blackPlayed || 0) >= (p2.whitePlayed || 0)) {
+               p1Color = 'black'; p2Color = 'white';
+             }
+             pairings.push({ player1: p1.id, player1Name: p1.name, player1Color: p1Color, player2: p2.id, player2Name: p2.name, player2Color: p2Color, result: 'pending', matchType: format === 'staircase' ? 'Round Robin' : 'Swiss' });
+           }
+           if (pool.length === 1) byePlayers.push(pool.shift());
         }
       }
 
