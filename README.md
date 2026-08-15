@@ -41,4 +41,21 @@ The platform is fully hosted and accessible online. There is no need to clone or
 
 ---
 
+## ♟️ Chess Engine (Tournament Manager)
+
+In addition to auctions, PitchBid features a robust **Chess Tournament Engine** capable of handling Knockout, Swiss, and Round Robin formats.
+
+### FIDE Mathematical Tiebreaks
+To ensure absolute fairness, the platform implements standard FIDE mathematical tiebreaks to automatically sort players on the leaderboard when their total points are tied.
+
+**Swiss & Round Robin Tiebreaks:**
+1. **Buchholz Cut 1 (BUC1):** Sum of all opponents' scores, excluding the lowest-scoring opponent.
+2. **Buchholz (BUC):** Sum of all opponents' scores.
+3. **Sonneborn-Berger (SB):** Sum of defeated opponents' scores plus half the scores of drawn opponents.
+4. **Direct Encounter:** Head-to-head match result (if applicable).
+
+If a tournament reaches its mathematical conclusion, the system automatically detects the end state and generates the final standings podium.
+
+---
+
 *Designed for the passion of local sports.*

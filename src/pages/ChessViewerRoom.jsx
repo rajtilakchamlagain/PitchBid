@@ -4,6 +4,7 @@ import { Trophy, ArrowLeft, LayoutGrid, Users } from 'lucide-react';
 import { doc, collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { motion, AnimatePresence } from 'framer-motion';
+import { calculateRankings } from '../utils/chessLogic';
 
 export default function ChessViewerRoom() {
   const navigate = useNavigate();
@@ -13,6 +14,12 @@ export default function ChessViewerRoom() {
   const [roomData, setRoomData] = useState(null);
   const [players, setPlayers] = useState([]);
   const [rounds, setRounds] = useState([]);
+  const [viewMode, setViewMode] = useState('live'); // 'live' or 'history'
+
+  const rankedPlayers = React.useMemo(() => {
+    const format = rounds.length > 0 ? rounds[0].format : 'staircase';
+    return calculateRankings(players, rounds, format);
+  }, [players, rounds]);
   
   useEffect(() => {
     if (!roomCode) {
@@ -30,7 +37,6 @@ export default function ChessViewerRoom() {
     const playersRef = collection(db, 'chess_tournaments', roomCode, 'players');
     const unsubPlayers = onSnapshot(playersRef, (snapshot) => {
       const p = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      p.sort((a, b) => (b.wins || 0) - (a.wins || 0));
       setPlayers(p);
     });
 
@@ -124,13 +130,17 @@ export default function ChessViewerRoom() {
           </div>
           
           <div style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 1rem 0.5rem', fontSize: '0.75rem', color: '#666', textTransform: 'uppercase', letterSpacing: '1px' }}>
-              <span>Player</span>
-              <span>Points</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 8px 8px', fontSize: '0.75rem', color: '#666', textTransform: 'uppercase', letterSpacing: '1px' }}>
+              <span style={{flex: 1}}>Player</span>
+              <div style={{ display: 'flex', gap: '10px', width: '90px', justifyContent: 'flex-end', paddingRight: '15px' }}>
+                <span title="Buchholz Score">BUC</span>
+                <span title="Sonneborn-Berger">SB</span>
+                <span>Pts</span>
+              </div>
             </div>
             
             <AnimatePresence>
-              {players.map((p, idx) => (
+              {rankedPlayers.map((p, idx) => (
                 <motion.div 
                   key={p.id}
                   layout
@@ -163,7 +173,11 @@ export default function ChessViewerRoom() {
                       {p.designation && <span style={{ fontSize: '0.7rem', color: '#00e5ff' }}>{p.designation}</span>}
                     </div>
                   </div>
-                  <div style={{ fontWeight: 'bold', color: '#fff', fontSize: '1.1rem' }}>{p.wins || 0}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ color: '#888', fontSize: '0.85rem', width: '20px', textAlign: 'right' }}>{p.BUC || 0}</div>
+                    <div style={{ color: '#888', fontSize: '0.85rem', width: '20px', textAlign: 'right' }}>{p.SB || 0}</div>
+                    <div style={{ fontWeight: 'bold', color: '#fff', fontSize: '1.2rem', width: '25px', textAlign: 'right' }}>{p.wins || 0}</div>
+                  </div>
                 </motion.div>
               ))}
             </AnimatePresence>
@@ -171,13 +185,31 @@ export default function ChessViewerRoom() {
             {players.length === 0 && (
               <div style={{ textAlign: 'center', color: '#666', padding: '3rem 0' }}>Waiting for players...</div>
             )}
+            
+            {players.length > 0 && (
+              <div style={{ marginTop: '2rem', padding: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', fontSize: '0.75rem', color: '#888', lineHeight: '1.5' }}>
+                <div style={{ fontWeight: 'bold', color: '#aaa', marginBottom: '8px' }}>Tiebreak Legend (FIDE Rules):</div>
+                <div style={{ marginBottom: '4px' }}><strong>BUC (Buchholz):</strong> Sum of all opponents' scores. Rewards players who faced tougher opponents.</div>
+                <div><strong>SB (Sonneborn-Berger):</strong> Sum of defeated opponents' scores + half of drawn opponents' scores. Rewards players who beat high-scoring opponents.</div>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Pairings Area */}
         <div style={{ flex: 1, padding: '3rem', overflowY: 'auto' }}>
           
-          {!activeRound ? (
+          <div style={{ display: 'flex', gap: '1rem', marginBottom: '3rem', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '1rem' }}>
+            <button onClick={() => setViewMode('live')} style={{ background: 'none', border: 'none', color: viewMode === 'live' ? '#fff' : '#888', fontWeight: viewMode === 'live' ? 'bold' : 'normal', fontSize: '1.2rem', cursor: 'pointer', padding: '0 0 8px 0', borderBottom: viewMode === 'live' ? '2px solid #10b981' : '2px solid transparent' }}>
+              Live Matchups
+            </button>
+            <button onClick={() => setViewMode('history')} style={{ background: 'none', border: 'none', color: viewMode === 'history' ? '#fff' : '#888', fontWeight: viewMode === 'history' ? 'bold' : 'normal', fontSize: '1.2rem', cursor: 'pointer', padding: '0 0 8px 0', borderBottom: viewMode === 'history' ? '2px solid #10b981' : '2px solid transparent' }}>
+              Tournament History
+            </button>
+          </div>
+
+          {viewMode === 'live' ? (
+            !activeRound ? (
             <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', opacity: 0.5 }}>
               <LayoutGrid size={64} style={{ marginBottom: '1.5rem' }} />
               <h2 style={{ fontSize: '2rem', fontWeight: '300' }}>Waiting for Pairings</h2>
@@ -296,7 +328,38 @@ export default function ChessViewerRoom() {
 
               </div>
             </div>
-          )}
+          ) : viewMode === 'history' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '3rem' }}>
+                {rounds.filter(r => r.status !== 'draft').map(r => (
+                  <div key={r.id}>
+                    <h3 style={{ fontSize: '1.5rem', fontWeight: 'bold', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>Round {r.roundNumber} {r.label && <span style={{color: '#888', fontSize:'1rem'}}>({r.label})</span>}</h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
+                      {r.pairings.map((p, idx) => (
+                        <div key={idx} style={{ background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                          <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: '0.5rem' }}>Board {idx+1}</div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                            <span style={{ color: p.result === '1-0' ? '#10b981' : p.result === '0-1' ? '#666' : '#fff' }}>{p.player1Name}</span>
+                            <span style={{ fontWeight: 'bold' }}>{p.result === '1-0' ? '1' : p.result === '0.5-0.5' ? '½' : '0'}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: p.result === '0-1' ? '#10b981' : p.result === '1-0' ? '#666' : '#fff' }}>{p.player2Name}</span>
+                            <span style={{ fontWeight: 'bold' }}>{p.result === '0-1' ? '1' : p.result === '0.5-0.5' ? '½' : '0'}</span>
+                          </div>
+                        </div>
+                      ))}
+                      {r.byePlayers && r.byePlayers.map((bp, idx) => (
+                        <div key={'bye'+idx} style={{ background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '12px', border: '1px dashed rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <span style={{ color: '#ffd700' }}>{bp.name} (Bye)</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                {rounds.filter(r => r.status !== 'draft').length === 0 && (
+                  <div style={{ textAlign: 'center', color: '#666', padding: '3rem' }}>No history available yet.</div>
+                )}
+              </div>
+          ) : null}
 
         </div>
       </main>

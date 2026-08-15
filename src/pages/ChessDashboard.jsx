@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Trophy, Swords, Shuffle, ArrowLeft, Trash2, Edit2, UserX, CheckCircle2, MoreVertical, ShieldAlert, RotateCcw, Settings, X } from 'lucide-react';
 import { doc, collection, onSnapshot, updateDoc, writeBatch, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { motion, AnimatePresence } from 'framer-motion';
+import { calculateRankings, isRoundRobinComplete } from '../utils/chessLogic';
 
 // Helper for Golden Ratio Byes
 function getGoldenRatioByes(numPlayers) {
@@ -77,6 +78,11 @@ export default function ChessDashboard() {
   const [swapMode, setSwapMode] = useState(false);
   const [selectedForSwap, setSelectedForSwap] = useState(null); 
 
+  const rankedPlayers = useMemo(() => {
+    const format = rounds.length > 0 ? rounds[0].format : 'staircase';
+    return calculateRankings(players, rounds, format);
+  }, [players, rounds]);
+
   useEffect(() => {
     if (!roomCode) {
       navigate('/');
@@ -95,7 +101,6 @@ export default function ChessDashboard() {
     const playersRef = collection(db, 'chess_tournaments', roomCode, 'players');
     const unsubPlayers = onSnapshot(playersRef, (snapshot) => {
       const p = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      p.sort((a, b) => (b.wins || 0) - (a.wins || 0));
       setPlayers(p);
     });
 
@@ -117,6 +122,12 @@ export default function ChessDashboard() {
     const activePlayers = players.filter(p => !p.withdrawn);
     if (activePlayers.length < 2) {
       alert("Need at least 2 active players to generate pairings.");
+      return;
+    }
+    
+    if (format === 'staircase' && isRoundRobinComplete(players, rounds)) {
+      alert("All Round Robin matchups have been played! The tournament will now conclude.");
+      await updateDoc(doc(db, 'chess_tournaments', roomCode), { status: 'finished' });
       return;
     }
     
@@ -267,6 +278,53 @@ export default function ChessDashboard() {
     } catch (err) {
       console.error(err);
       alert("Error publishing round.");
+    }
+  };
+
+  const finishTournament = async () => {
+    if (!window.confirm("Are you sure you want to officially conclude the tournament?")) return;
+    try {
+      await updateDoc(doc(db, 'chess_tournaments', roomCode), { status: 'finished' });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const rollbackRound = async (roundId) => {
+    if (!window.confirm("WARNING: Are you sure you want to delete this round and revert all scores? This action cannot be undone.")) return;
+    
+    try {
+      const roundDoc = rounds.find(r => r.id === roundId);
+      const batch = writeBatch(db);
+      
+      // Revert scores on players
+      roundDoc.pairings.forEach(p => {
+         const p1Doc = players.find(x => x.id === p.player1);
+         const p2Doc = players.find(x => x.id === p.player2);
+         
+         let p1Inc = 0; let p2Inc = 0;
+         if (p.result.startsWith('1-0')) { p1Inc = -1; }
+         else if (p.result.startsWith('0-1')) { p2Inc = -1; }
+         else if (p.result === '0.5-0.5') { p1Inc = -0.5; p2Inc = -0.5; }
+         
+         if (p1Doc && p1Inc !== 0) batch.update(doc(db, 'chess_tournaments', roomCode, 'players', p.player1), { wins: (p1Doc.wins || 0) + p1Inc });
+         if (p2Doc && p2Inc !== 0) batch.update(doc(db, 'chess_tournaments', roomCode, 'players', p.player2), { wins: (p2Doc.wins || 0) + p2Inc });
+      });
+
+      if (roundDoc.byePlayers && roundDoc.byePlayers.length > 0) {
+        roundDoc.byePlayers.forEach(bp => {
+          const pDoc = players.find(x => x.id === bp.id);
+          if (pDoc) batch.update(doc(db, 'chess_tournaments', roomCode, 'players', bp.id), { wins: (pDoc.wins || 0) - 1 });
+        });
+      }
+      
+      batch.delete(doc(db, 'chess_tournaments', roomCode, 'rounds', roundId));
+      batch.update(doc(db, 'chess_tournaments', roomCode), { currentRound: roundDoc.roundNumber - 1 });
+      
+      await batch.commit();
+    } catch (e) {
+      console.error(e);
+      alert("Error rolling back round.");
     }
   };
 
@@ -660,11 +718,15 @@ export default function ChessDashboard() {
           {activeTab === 'standings' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 8px 8px', fontSize: '0.75rem', color: '#666', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                <span>Player</span>
-                <span>Pts</span>
+                <span style={{flex: 1}}>Player</span>
+                <div style={{ display: 'flex', gap: '15px', width: '120px', justifyContent: 'flex-end', paddingRight: '40px' }}>
+                  <span title="Buchholz Score (Sum of opponents' points)">BUC</span>
+                  <span title="Sonneborn-Berger (Sum of defeated opponents' points)">SB</span>
+                  <span>Pts</span>
+                </div>
               </div>
               <AnimatePresence>
-                {players.map((p, idx) => (
+                {rankedPlayers.map((p, idx) => (
                   <motion.div 
                     key={p.id} 
                     layout 
@@ -687,10 +749,12 @@ export default function ChessDashboard() {
                         {p.designation && <span style={{ fontSize: '0.7rem', color: '#00e5ff' }}>{p.designation}</span>}
                       </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <div style={{ fontWeight: 'bold', color: '#fff', fontSize: '1.2rem' }}>{p.wins || 0}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                      <div style={{ color: '#888', fontSize: '0.85rem', width: '25px', textAlign: 'right' }}>{p.BUC || 0}</div>
+                      <div style={{ color: '#888', fontSize: '0.85rem', width: '25px', textAlign: 'right' }}>{p.SB || 0}</div>
+                      <div style={{ fontWeight: 'bold', color: '#fff', fontSize: '1.2rem', width: '30px', textAlign: 'right' }}>{p.wins || 0}</div>
                       
-                      <div style={{ display: 'flex', gap: '5px' }}>
+                      <div style={{ display: 'flex', gap: '5px', marginLeft: '10px' }}>
                         <button onClick={(e) => { e.stopPropagation(); toggleDisqualify(p.id, p.name, p.withdrawn); }} style={{ background: 'none', border: 'none', color: p.withdrawn ? '#10b981' : '#ff9900', cursor: 'pointer', padding: '4px' }} title={p.withdrawn ? "Restore" : "Eliminate"}>
                           {p.withdrawn ? <CheckCircle2 size={16} /> : <ShieldAlert size={16} />}
                         </button>
@@ -728,7 +792,26 @@ export default function ChessDashboard() {
           </div>
           
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+            {roomData?.status === 'finished' ? (
+               <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                 <div style={{ padding: '10px 20px', background: 'linear-gradient(135deg, #FFD700, #FDB931)', color: '#000', borderRadius: '12px', fontWeight: 'bold', fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                   <Trophy size={20} /> TOURNAMENT CONCLUDED
+                 </div>
+                 <button onClick={() => updateDoc(doc(db, 'chess_tournaments', roomCode), { status: 'live' })} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '12px', borderRadius: '12px', cursor: 'pointer' }}>
+                   Reopen
+                 </button>
+               </div>
+            ) : (
             <div style={{ display: 'flex', gap: '1rem' }}>
+              {activeRoundData?.status === 'completed' && (
+                <button 
+                  onClick={() => rollbackRound(activeRoundData.id)}
+                  style={{ background: 'transparent', border: '1px solid rgba(255,68,68,0.5)', color: '#ff4444', padding: '12px 24px', borderRadius: '12px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}
+                >
+                  <RotateCcw size={18} /> Rollback Round
+                </button>
+              )}
+              
               <button 
                 onClick={() => generatePairings('knockout')} 
                 disabled={isGenerating || players.filter(p=>!p.withdrawn).length < 2 || activeRoundData?.status === 'draft'}
@@ -754,7 +837,17 @@ export default function ChessDashboard() {
               >
                 <Shuffle size={18} /> {activeRoundData && (activeRoundData.format === 'swiss' || activeRoundData.format === 'staircase') ? 'Change Format' : `Hybrid Setup (Round ${currentRoundNumber + 1})`}
               </button>
+
+              {activeRoundData?.status === 'completed' && (
+                <button 
+                  onClick={finishTournament}
+                  style={{ background: 'linear-gradient(135deg, #FFD700, #FDB931)', color: '#000', border: 'none', padding: '12px 24px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}
+                >
+                  <Trophy size={18} /> Finish Tournament
+                </button>
+              )}
             </div>
+            )}
             {players.filter(p=>!p.withdrawn).length < 2 && <span style={{ color: '#ff4444', fontSize: '0.85rem' }}>* Need at least 2 active players</span>}
             {activeRoundData?.status === 'draft' && <span style={{ color: '#ff9900', fontSize: '0.85rem' }}>* Publish or delete the draft first</span>}
           </div>
