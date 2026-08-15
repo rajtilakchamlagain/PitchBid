@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Users, Trophy, Settings, Swords, ArrowRight, Play, CheckCircle2, Shuffle, ArrowLeft } from 'lucide-react';
-import { doc, getDoc, collection, query, onSnapshot, updateDoc, writeBatch, serverTimestamp, getDocs } from 'firebase/firestore';
+import { Users, Trophy, Settings, Swords, ArrowRight, Play, CheckCircle2, Shuffle, ArrowLeft, Trash2 } from 'lucide-react';
+import { doc, getDoc, collection, query, onSnapshot, updateDoc, writeBatch, serverTimestamp, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
 export default function ChessDashboard() {
@@ -179,6 +179,16 @@ export default function ChessDashboard() {
     }
   };
 
+  const removePlayer = async (playerId, playerName) => {
+    if (!window.confirm(`Are you sure you want to remove ${playerName} from the tournament?`)) return;
+    try {
+      await deleteDoc(doc(db, 'chess_tournaments', roomCode, 'players', playerId));
+    } catch (err) {
+      console.error(err);
+      alert("Error removing player");
+    }
+  };
+
   if (!roomData) return <div style={{ color: 'white', padding: '2rem', textAlign: 'center' }}>Loading Tournament Data...</div>;
 
   const currentRoundData = rounds.find(r => r.roundNumber === currentRoundNumber);
@@ -219,7 +229,16 @@ export default function ChessDashboard() {
                     <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', width: '20px' }}>{idx + 1}</span>
                     <span style={{ fontWeight: '500' }}>{p.name}</span>
                   </div>
-                  <div style={{ fontWeight: 'bold', color: 'var(--primary)' }}>{p.wins || 0}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                    <div style={{ fontWeight: 'bold', color: 'var(--primary)' }}>{p.wins || 0}</div>
+                    <button 
+                      onClick={() => removePlayer(p.id, p.name)}
+                      style={{ background: 'none', border: 'none', color: '#ff4444', cursor: 'pointer', padding: '4px' }}
+                      title="Remove Player"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
               ))}
               {players.length === 0 && <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem 0' }}>No players registered yet.</div>}
@@ -241,14 +260,16 @@ export default function ChessDashboard() {
             <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>{currentRoundNumber === 0 ? 'Tournament Lobby' : `Round ${currentRoundNumber}`}</h1>
             <p style={{ color: 'var(--text-muted)' }}>{players.length} Players Registered</p>
           </div>
-          
-          <div style={{ display: 'flex', gap: '1rem' }}>
-            <button className="btn-outline" onClick={() => generatePairings('knockout')} disabled={isGenerating || players.length < 2}>
-              <Swords size={18} /> Knockout Pairings
-            </button>
-            <button className="btn-primary" onClick={() => generatePairings('swiss')} disabled={isGenerating || players.length < 2}>
-              <Shuffle size={18} /> Swiss Pairings (Round {currentRoundNumber + 1})
-            </button>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <button className="btn-outline" onClick={() => generatePairings('knockout')} disabled={isGenerating || players.length < 2}>
+                <Swords size={18} /> Knockout Pairings
+              </button>
+              <button className="btn-primary" onClick={() => generatePairings('swiss')} disabled={isGenerating || players.length < 2}>
+                <Shuffle size={18} /> Swiss Pairings (Round {currentRoundNumber + 1})
+              </button>
+            </div>
+            {players.length < 2 && <span style={{ color: '#ff4444', fontSize: '0.8rem' }}>* Need at least 2 players to generate pairings</span>}
           </div>
         </div>
 
