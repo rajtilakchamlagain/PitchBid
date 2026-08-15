@@ -112,6 +112,61 @@ export default function LandingPage() {
         </div>
       </div>
 
+      {/* Chess Module Section */}
+      <div style={{ 
+        padding: '6rem 2rem', 
+        textAlign: 'center', 
+        maxWidth: '1200px', 
+        margin: '0 auto',
+        position: 'relative',
+        background: 'linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%)',
+        borderRadius: '32px',
+        border: '1px solid rgba(0,0,0,0.05)',
+        boxShadow: '0 20px 40px rgba(0,0,0,0.02)'
+      }}>
+        
+        <div style={{ display: 'inline-block', background: 'rgba(0,0,0,0.8)', color: '#fff', padding: '6px 16px', borderRadius: '30px', fontSize: '0.85rem', fontWeight: '600', marginBottom: '2rem' }}>
+          ♞ NEW: Chess Tournament Manager
+        </div>
+        
+        <h2 style={{ fontSize: '3.5rem', fontWeight: '900', lineHeight: '1.1', letterSpacing: '-0.04em', marginBottom: '1.5rem', color: '#000' }}>
+          Swiss & Knockout <br/>
+          <span style={{ background: 'linear-gradient(135deg, #ff0080 0%, #ff8c00 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            Pairing Engine
+          </span>
+        </h2>
+        
+        <p style={{ fontSize: '1.15rem', color: '#555', maxWidth: '600px', margin: '0 auto 3rem', lineHeight: '1.6' }}>
+          Host professional chess tournaments. Automatically generate Swiss pairings, track colors, record wins, and manage leaderboards in real-time.
+        </p>
+
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+          <button 
+            onClick={() => navigate('/chess-owner-entry')}
+            style={{ 
+              background: '#000', color: '#fff', padding: '1rem 2rem', borderRadius: '12px', fontSize: '1.05rem', fontWeight: '600', border: 'none', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: '10px', transition: 'all 0.2s', boxShadow: '0 10px 20px rgba(0,0,0,0.1)'
+            }}
+            onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+            onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+          >
+            <ShieldCheck size={18} /> Host Tournament
+          </button>
+          
+          <button 
+            onClick={() => navigate('/chess-player-entry')}
+            style={{ 
+              background: '#fff', color: '#000', padding: '1rem 2rem', borderRadius: '12px', fontSize: '1.05rem', fontWeight: '600', border: '1px solid rgba(0,0,0,0.1)', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: '10px', transition: 'all 0.2s'
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#000'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+          >
+            <Users size={18} /> Join as Player
+          </button>
+        </div>
+      </div>
+
       {/* Feature Grid */}
       <div style={{ maxWidth: '1200px', margin: '4rem auto', padding: '0 2rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
         
