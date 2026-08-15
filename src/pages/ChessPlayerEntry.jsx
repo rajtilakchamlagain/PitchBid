@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, CheckCircle2, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, Users, CheckCircle2 } from 'lucide-react';
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../firebase';
+import { db } from '../firebase';
 
 export default function ChessPlayerEntry() {
   const navigate = useNavigate();
@@ -97,13 +96,8 @@ export default function ChessPlayerEntry() {
         }
       }
 
-      // Upload Photo if exists
+      // Photo upload temporarily disabled
       let photoUrl = '';
-      if (photoFile) {
-        const fileRef = ref(storage, `chess_profiles/${validatedRoomId}/${Date.now()}_${photoFile.name}`);
-        await uploadBytes(fileRef, photoFile);
-        photoUrl = await getDownloadURL(fileRef);
-      }
 
       await addDoc(playersRef, {
         name: formData.name.trim(),
@@ -179,30 +173,7 @@ export default function ChessPlayerEntry() {
           <div className="animate-fade-in">
             <h2 style={{ fontSize: '1.8rem', marginBottom: '1.5rem', textAlign: 'center' }}>Player Details</h2>
             
-            <div className="input-group">
-              <label>Profile Photo (Optional, Max 50MB)</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'rgba(255,255,255,0.05)', border: '1px dashed rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                  {photoFile ? <img src={URL.createObjectURL(photoFile)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <ImageIcon size={24} color="#888" />}
-                </div>
-                <input 
-                  type="file" 
-                  accept="image/*"
-                  onChange={(e) => {
-                    const file = e.target.files[0];
-                    if (file) {
-                      if (file.size > 50 * 1024 * 1024) {
-                        alert("File is too large. Maximum size is 50MB.");
-                        e.target.value = '';
-                      } else {
-                        setPhotoFile(file);
-                      }
-                    }
-                  }}
-                  style={{ color: '#888', fontSize: '0.9rem' }}
-                />
-              </div>
-            </div>
+            {/* Profile Photo Upload Temporarily Hidden */}
 
             <div className="input-group">
               <label>Your Name *</label>
