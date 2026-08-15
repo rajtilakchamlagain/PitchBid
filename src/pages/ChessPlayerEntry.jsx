@@ -67,7 +67,29 @@ export default function ChessPlayerEntry() {
     
     setIsLoading(true);
     try {
-      await addDoc(collection(db, 'chess_tournaments', validatedRoomId, 'players'), {
+      const playersRef = collection(db, 'chess_tournaments', validatedRoomId, 'players');
+      
+      // Check Roll Number Uniqueness
+      const qRoll = query(playersRef, where('rollNumber', '==', formData.rollNumber));
+      const rollSnap = await getDocs(qRoll);
+      if (!rollSnap.empty) {
+        setErrorMsg(`Roll Number ${formData.rollNumber} is already registered.`);
+        setIsLoading(false);
+        return;
+      }
+
+      // Check Designation Uniqueness if Core Member
+      if (formData.isCoreMember === 'Yes') {
+        const qDesig = query(playersRef, where('designation', '==', formData.designation));
+        const desigSnap = await getDocs(qDesig);
+        if (!desigSnap.empty) {
+          setErrorMsg(`The designation "${formData.designation}" is already taken.`);
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      await addDoc(playersRef, {
         name: formData.name,
         rating: formData.rating ? Number(formData.rating) : 1200,
         collegeName: formData.collegeName,
