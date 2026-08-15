@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Trophy, Swords, Shuffle, ArrowLeft, Trash2, Edit2, UserX, CheckCircle2, MoreVertical, ShieldAlert, RotateCcw, Settings } from 'lucide-react';
+import { Trophy, Swords, Shuffle, ArrowLeft, Trash2, Edit2, UserX, CheckCircle2, MoreVertical, ShieldAlert, RotateCcw, Settings, X } from 'lucide-react';
 import { doc, collection, onSnapshot, updateDoc, writeBatch, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -66,6 +66,7 @@ export default function ChessDashboard() {
   const [currentRoundNumber, setCurrentRoundNumber] = useState(0);
   const [activeTab, setActiveTab] = useState('matchups'); 
   const [isGenerating, setIsGenerating] = useState(false);
+  const [selectedPlayer, setSelectedPlayer] = useState(null);
 
   // Swiss Modal State
   const [showSwissModal, setShowSwissModal] = useState(false);
@@ -464,6 +465,83 @@ export default function ChessDashboard() {
         </div>
       )}
 
+      {selectedPlayer && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(5px)' }} onClick={() => setSelectedPlayer(null)}>
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            onClick={(e) => e.stopPropagation()} 
+            style={{ background: '#111', width: '500px', maxWidth: '90vw', borderRadius: '24px', padding: '2rem', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 40px 80px rgba(0,0,0,0.5)', maxHeight: '90vh', overflowY: 'auto' }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
+              <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                {selectedPlayer.photoUrl ? (
+                  <img src={selectedPlayer.photoUrl} alt="" style={{ width: '80px', height: '80px', borderRadius: '16px', objectFit: 'cover', border: '2px solid rgba(255,255,255,0.1)' }} />
+                ) : (
+                  <div style={{ width: '80px', height: '80px', borderRadius: '16px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid rgba(255,255,255,0.1)' }}>
+                    <UserX size={32} color="#555" />
+                  </div>
+                )}
+                <div>
+                  <h2 style={{ fontSize: '1.8rem', fontWeight: 'bold', margin: 0 }}>{selectedPlayer.name}</h2>
+                  <div style={{ fontSize: '0.9rem', color: '#00e5ff', fontWeight: 'bold', marginTop: '4px' }}>
+                    {selectedPlayer.isCoreMember === 'Yes' ? selectedPlayer.designation : 'Player'}
+                  </div>
+                </div>
+              </div>
+              <button onClick={() => setSelectedPlayer(null)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '12px' }}>
+                <div style={{ fontSize: '0.75rem', color: '#888', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>Points</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#fff' }}>{selectedPlayer.wins || 0}</div>
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '12px' }}>
+                <div style={{ fontSize: '0.75rem', color: '#888', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>Rating</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#fff' }}>{selectedPlayer.rating || 1200}</div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'rgba(255,255,255,0.02)', padding: '1.5rem', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.5rem' }}>
+                <span style={{ color: '#888' }}>College</span>
+                <span style={{ fontWeight: '500', textAlign: 'right' }}>{selectedPlayer.collegeName || 'N/A'}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.5rem', paddingTop: '0.5rem' }}>
+                <span style={{ color: '#888' }}>Course & Year</span>
+                <span style={{ fontWeight: '500', textAlign: 'right' }}>
+                  {selectedPlayer.course} {selectedPlayer.branch ? `(${selectedPlayer.branch.includes('(') ? selectedPlayer.branch.match(/\((.*?)\)/)[1] : selectedPlayer.branch})` : ''} - {selectedPlayer.year} Year (Sem {selectedPlayer.semester})
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.5rem', paddingTop: '0.5rem' }}>
+                <span style={{ color: '#888' }}>Roll Number</span>
+                <span style={{ fontWeight: '500', textAlign: 'right', fontFamily: 'monospace' }}>{selectedPlayer.rollNumber}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.5rem', paddingTop: '0.5rem' }}>
+                <span style={{ color: '#888' }}>Hostel / Address</span>
+                <span style={{ fontWeight: '500', textAlign: 'right' }}>{selectedPlayer.address}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.5rem', paddingTop: '0.5rem' }}>
+                <span style={{ color: '#888' }}>FIDE ID</span>
+                <span style={{ fontWeight: '500', textAlign: 'right' }}>{selectedPlayer.fideId || 'None'}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '0.5rem' }}>
+                <span style={{ color: '#888' }}>AICF ID</span>
+                <span style={{ fontWeight: '500', textAlign: 'right' }}>{selectedPlayer.aicfId || 'None'}</span>
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1.5rem', fontSize: '0.85rem', color: '#666' }}>
+              <span>White Played: {selectedPlayer.whitePlayed || 0}</span>
+              <span>Black Played: {selectedPlayer.blackPlayed || 0}</span>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       {/* Sidebar - Players & Standings */}
       <div style={{ width: '380px', background: '#111', borderRight: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '2rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
@@ -498,7 +576,13 @@ export default function ChessDashboard() {
               </div>
               <AnimatePresence>
                 {players.map((p, idx) => (
-                  <motion.div key={p.id} layout style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: p.withdrawn ? 'rgba(255,0,0,0.02)' : 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.03)', opacity: p.withdrawn ? 0.5 : 1 }}>
+                  <motion.div 
+                    key={p.id} 
+                    layout 
+                    onClick={() => setSelectedPlayer(p)}
+                    style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: p.withdrawn ? 'rgba(255,0,0,0.02)' : 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.03)', opacity: p.withdrawn ? 0.5 : 1 }}
+                    whileHover={{ scale: 1.02, background: 'rgba(255,255,255,0.05)' }}
+                  >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <span style={{ color: '#666', fontSize: '0.85rem', width: '20px', fontWeight: 'bold' }}>{idx + 1}</span>
                       {p.photoUrl ? (
@@ -518,10 +602,10 @@ export default function ChessDashboard() {
                       <div style={{ fontWeight: 'bold', color: '#fff', fontSize: '1.2rem' }}>{p.wins || 0}</div>
                       
                       <div style={{ display: 'flex', gap: '5px' }}>
-                        <button onClick={() => toggleDisqualify(p.id, p.name, p.withdrawn)} style={{ background: 'none', border: 'none', color: p.withdrawn ? '#10b981' : '#ff9900', cursor: 'pointer', padding: '4px' }} title={p.withdrawn ? "Restore" : "Eliminate"}>
+                        <button onClick={(e) => { e.stopPropagation(); toggleDisqualify(p.id, p.name, p.withdrawn); }} style={{ background: 'none', border: 'none', color: p.withdrawn ? '#10b981' : '#ff9900', cursor: 'pointer', padding: '4px' }} title={p.withdrawn ? "Restore" : "Eliminate"}>
                           {p.withdrawn ? <CheckCircle2 size={16} /> : <ShieldAlert size={16} />}
                         </button>
-                        <button onClick={() => removePlayer(p.id, p.name)} style={{ background: 'none', border: 'none', color: '#ff4444', cursor: 'pointer', padding: '4px' }} title="Delete completely">
+                        <button onClick={(e) => { e.stopPropagation(); removePlayer(p.id, p.name); }} style={{ background: 'none', border: 'none', color: '#ff4444', cursor: 'pointer', padding: '4px' }} title="Delete completely">
                           <Trash2 size={16} />
                         </button>
                       </div>
