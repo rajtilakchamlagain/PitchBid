@@ -150,6 +150,13 @@ export default function ChessViewerRoom() {
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <span style={{ color: '#888', fontSize: '0.9rem', width: '20px', fontWeight: 'bold' }}>{idx + 1}</span>
+                    {p.photoUrl ? (
+                      <img src={p.photoUrl} alt="" style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', border: idx === 0 ? '2px solid #ffd700' : '2px solid transparent' }} />
+                    ) : (
+                      <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Users size={16} color="#555" />
+                      </div>
+                    )}
                     <span style={{ fontWeight: '500', fontSize: '1.05rem', color: idx < 3 ? '#fff' : '#ccc' }}>{p.name}</span>
                   </div>
                   <div style={{ fontWeight: 'bold', color: '#fff', fontSize: '1.1rem' }}>{p.wins || 0}</div>

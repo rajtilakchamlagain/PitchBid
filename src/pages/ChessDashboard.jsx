@@ -394,6 +394,13 @@ export default function ChessDashboard() {
                   <motion.div key={p.id} layout style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: p.withdrawn ? 'rgba(255,0,0,0.02)' : 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.03)', opacity: p.withdrawn ? 0.5 : 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <span style={{ color: '#666', fontSize: '0.85rem', width: '20px', fontWeight: 'bold' }}>{idx + 1}</span>
+                      {p.photoUrl ? (
+                        <img src={p.photoUrl} alt="" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
+                      ) : (
+                        <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <UserX size={14} color="#888" />
+                        </div>
+                      )}
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
                         <span style={{ fontWeight: '500', color: p.withdrawn ? '#888' : '#fff' }}>{p.name} {p.withdrawn && '(WD)'}</span>
                       </div>

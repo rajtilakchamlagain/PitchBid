@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Users, CheckCircle2, Image as ImageIcon } from 'lucide-react';
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../firebase';
 
 export default function ChessPlayerEntry() {
   const navigate = useNavigate();
@@ -11,6 +12,7 @@ export default function ChessPlayerEntry() {
   const [errorMsg, setErrorMsg] = useState('');
   
   const [validatedRoomId, setValidatedRoomId] = useState(null);
+  const [photoFile, setPhotoFile] = useState(null);
   
   const [formData, setFormData] = useState({
     playerCode: '',
@@ -70,10 +72,11 @@ export default function ChessPlayerEntry() {
       const playersRef = collection(db, 'chess_tournaments', validatedRoomId, 'players');
       
       // Check Roll Number Uniqueness
-      const qRoll = query(playersRef, where('rollNumber', '==', formData.rollNumber));
+      const cleanRollNumber = formData.rollNumber.trim();
+      const qRoll = query(playersRef, where('rollNumber', '==', cleanRollNumber));
       const rollSnap = await getDocs(qRoll);
       if (!rollSnap.empty) {
-        setErrorMsg(`Roll Number ${formData.rollNumber} is already registered.`);
+        setErrorMsg(`Roll Number ${cleanRollNumber} is already registered.`);
         setIsLoading(false);
         return;
       }
@@ -89,21 +92,30 @@ export default function ChessPlayerEntry() {
         }
       }
 
+      // Upload Photo if exists
+      let photoUrl = '';
+      if (photoFile) {
+        const fileRef = ref(storage, `chess_profiles/${validatedRoomId}/${Date.now()}_${photoFile.name}`);
+        await uploadBytes(fileRef, photoFile);
+        photoUrl = await getDownloadURL(fileRef);
+      }
+
       await addDoc(playersRef, {
-        name: formData.name,
+        name: formData.name.trim(),
         rating: formData.rating ? Number(formData.rating) : 1200,
-        collegeName: formData.collegeName,
-        rollNumber: formData.rollNumber,
-        address: formData.address,
+        collegeName: formData.collegeName.trim(),
+        rollNumber: cleanRollNumber,
+        address: formData.address.trim(),
         isCoreMember: formData.isCoreMember,
         designation: formData.isCoreMember === 'Yes' ? formData.designation : '',
-        fideId: formData.fideId,
-        aicfId: formData.aicfId,
+        fideId: formData.fideId.trim(),
+        aicfId: formData.aicfId.trim(),
+        photoUrl: photoUrl,
         wins: 0,
         matchesPlayed: 0,
         whitePlayed: 0,
         blackPlayed: 0,
-        colorHistory: [], // e.g., ['w', 'b', 'b']
+        colorHistory: [],
         createdAt: serverTimestamp()
       });
       setStep(3);
@@ -158,6 +170,31 @@ export default function ChessPlayerEntry() {
           <div className="animate-fade-in">
             <h2 style={{ fontSize: '1.8rem', marginBottom: '1.5rem', textAlign: 'center' }}>Player Details</h2>
             
+            <div className="input-group">
+              <label>Profile Photo (Optional, Max 50MB)</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'rgba(255,255,255,0.05)', border: '1px dashed rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                  {photoFile ? <img src={URL.createObjectURL(photoFile)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <ImageIcon size={24} color="#888" />}
+                </div>
+                <input 
+                  type="file" 
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                      if (file.size > 50 * 1024 * 1024) {
+                        alert("File is too large. Maximum size is 50MB.");
+                        e.target.value = '';
+                      } else {
+                        setPhotoFile(file);
+                      }
+                    }
+                  }}
+                  style={{ color: '#888', fontSize: '0.9rem' }}
+                />
+              </div>
+            </div>
+
             <div className="input-group">
               <label>Your Name *</label>
               <input 
