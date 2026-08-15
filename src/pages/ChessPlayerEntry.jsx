@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Users, CheckCircle2 } from 'lucide-react';
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -31,6 +31,28 @@ export default function ChessPlayerEntry() {
     aicfId: ''
   });
 
+  useEffect(() => {
+    const savedRoomId = sessionStorage.getItem('chess_validatedRoomId');
+    const savedPlayerCode = sessionStorage.getItem('chess_playerCode');
+    
+    if (savedRoomId && savedPlayerCode) {
+      setValidatedRoomId(savedRoomId);
+      setFormData(prev => ({ ...prev, playerCode: savedPlayerCode }));
+      setStep(2);
+    }
+  }, []);
+
+  const handleBack = () => {
+    if (step === 1) {
+      navigate('/');
+    } else {
+      sessionStorage.removeItem('chess_validatedRoomId');
+      sessionStorage.removeItem('chess_playerCode');
+      setValidatedRoomId(null);
+      setStep(1);
+    }
+  };
+
   const verifyCode = async () => {
     if (!formData.playerCode) return;
     setIsLoading(true);
@@ -56,6 +78,8 @@ export default function ChessPlayerEntry() {
       }
       
       setValidatedRoomId(roomDoc.id);
+      sessionStorage.setItem('chess_validatedRoomId', roomDoc.id);
+      sessionStorage.setItem('chess_playerCode', formData.playerCode.toUpperCase());
       setStep(2);
     } catch (err) {
       console.error(err);
@@ -121,6 +145,8 @@ export default function ChessPlayerEntry() {
         colorHistory: [],
         createdAt: serverTimestamp()
       });
+      sessionStorage.removeItem('chess_validatedRoomId');
+      sessionStorage.removeItem('chess_playerCode');
       setStep(3);
     } catch (err) {
       console.error(err);
@@ -134,9 +160,11 @@ export default function ChessPlayerEntry() {
     <div style={{ background: 'var(--bg-color)', color: 'var(--text-main)', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ width: '100%', maxWidth: '500px', padding: '2rem', background: 'var(--panel-bg)', borderRadius: '16px', border: '1px solid var(--glass-border)' }}>
         
-        <button onClick={() => step === 1 ? navigate('/') : setStep(step - 1)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2rem' }}>
-          <ArrowLeft size={16} /> Back
-        </button>
+        {step !== 3 && (
+          <button onClick={handleBack} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2rem' }}>
+            <ArrowLeft size={16} /> Back
+          </button>
+        )}
 
         {step === 1 && (
           <div className="animate-fade-in">
