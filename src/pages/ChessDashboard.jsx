@@ -752,7 +752,7 @@ export default function ChessDashboard() {
 
                   </div>
 
-                  {pairing.result === 'pending' && !swapMode && activeRoundData.status === 'published' && (
+                  {pairing.result === 'pending' && !swapMode && activeRoundData.status === 'published' && activeRoundData.format !== 'knockout' && (
                     <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'center' }}>
                       <button style={{ width: '100%', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#aaa', padding: '8px', borderRadius: '8px', fontSize: '0.9rem', cursor: 'pointer' }} onClick={() => reportResult(activeRoundData.id, idx, '0.5-0.5')}>Draw ½ - ½</button>
                     </div>
