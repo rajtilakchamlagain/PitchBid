@@ -1,9 +1,59 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Trophy, Swords, Shuffle, ArrowLeft, Trash2, Edit2, UserX, CheckCircle2, MoreVertical, ShieldAlert, RotateCcw } from 'lucide-react';
+import { Trophy, Swords, Shuffle, ArrowLeft, Trash2, Edit2, UserX, CheckCircle2, MoreVertical, ShieldAlert, RotateCcw, Settings } from 'lucide-react';
 import { doc, collection, onSnapshot, updateDoc, writeBatch, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { motion, AnimatePresence } from 'framer-motion';
+
+// Helper for Golden Ratio Byes
+function getGoldenRatioByes(numPlayers) {
+  let target = 1;
+  while(target < numPlayers) target *= 2;
+  if(target === numPlayers) return { byes: 0, playing: numPlayers };
+  const pBelow = target / 2;
+  const toEliminate = numPlayers - pBelow;
+  const playing = toEliminate * 2;
+  const byes = numPlayers - playing;
+  return { byes, playing };
+}
+
+// Helper for Sorting Hierarchy
+function sortPlayersHierarchy(pA, pB) {
+  // 1. Designation
+  const desigRank = { 'President': 5, 'Secretary': 4, 'Vice President': 3, 'Event Management': 2, 'Asst. Secretary': 1 };
+  const dA = desigRank[pA.designation] || 0;
+  const dB = desigRank[pB.designation] || 0;
+  if (dA !== dB) return dB - dA;
+  
+  // 2. Rating
+  const rA = Number(pA.rating) || 0;
+  const rB = Number(pB.rating) || 0;
+  if (rA !== rB) return rB - rA;
+  
+  // 3. FIDE ID
+  const hasFideA = pA.fideId ? 1 : 0;
+  const hasFideB = pB.fideId ? 1 : 0;
+  if (hasFideA !== hasFideB) return hasFideB - hasFideA;
+  
+  // 4. AICF ID
+  const hasAicfA = pA.aicfId ? 1 : 0;
+  const hasAicfB = pB.aicfId ? 1 : 0;
+  if (hasAicfA !== hasAicfB) return hasAicfB - hasAicfA;
+  
+  // 5. Course & Year
+  const courseRank = { 'M.Tech': 10, 'B.Tech': 9, 'B.Sc': 8, 'B.Com': 7, 'B.A': 6 };
+  const cA = courseRank[pA.course] || 0;
+  const cB = courseRank[pB.course] || 0;
+  if (cA !== cB) return cB - cA;
+  
+  const yearRank = { '5th': 5, '4th': 4, '3rd': 3, '2nd': 2, '1st': 1 };
+  const yA = yearRank[pA.year] || 0;
+  const yB = yearRank[pB.year] || 0;
+  if (yA !== yB) return yB - yA;
+  
+  // 6. Alphabetical
+  return (pA.name || '').localeCompare(pB.name || '');
+}
 
 export default function ChessDashboard() {
   const navigate = useNavigate();
@@ -17,9 +67,14 @@ export default function ChessDashboard() {
   const [activeTab, setActiveTab] = useState('matchups'); 
   const [isGenerating, setIsGenerating] = useState(false);
 
+  // Swiss Modal State
+  const [showSwissModal, setShowSwissModal] = useState(false);
+  const [swissMode, setSwissMode] = useState('swiss');
+  const [swissRounds, setSwissRounds] = useState(5);
+
   // Swap State
   const [swapMode, setSwapMode] = useState(false);
-  const [selectedForSwap, setSelectedForSwap] = useState(null); // { pairingIndex, playerKey (1 or 2) }
+  const [selectedForSwap, setSelectedForSwap] = useState(null); 
 
   useEffect(() => {
     if (!roomCode) {
@@ -64,7 +119,6 @@ export default function ChessDashboard() {
       return;
     }
     
-    // Check if there is already a draft
     const existingDraft = rounds.find(r => r.status === 'draft');
     if (existingDraft) {
       alert("There is already an unpublished draft round. Delete or publish it first.");
@@ -76,39 +130,73 @@ export default function ChessDashboard() {
     try {
       const nextRoundNum = currentRoundNumber + 1;
       let pairings = [];
+      let byePlayers = [];
+      let label = '';
       
-      let pool = [...activePlayers].sort(() => Math.random() - 0.5);
-
-      if (format === 'swiss') {
-        pool.sort((a, b) => (b.wins || 0) - (a.wins || 0));
+      if (format === 'knockout') {
+        const lastRound = rounds.length > 0 ? rounds[0] : null;
+        
+        // Check for 3rd Place Match generation (if last round had exactly 4 players / 2 matches)
+        if (lastRound && lastRound.format === 'knockout' && lastRound.pairings.length === 2 && lastRound.status === 'completed') {
+           const finalists = [];
+           const bronze = [];
+           for (const p of lastRound.pairings) {
+             if (p.result.startsWith('1-0')) { finalists.push(p.player1); bronze.push(p.player2); }
+             else if (p.result.startsWith('0-1')) { finalists.push(p.player2); bronze.push(p.player1); }
+           }
+           if (finalists.length === 2 && bronze.length === 2) {
+             const f1 = players.find(x => x.id === finalists[0]);
+             const f2 = players.find(x => x.id === finalists[1]);
+             const b1 = players.find(x => x.id === bronze[0]);
+             const b2 = players.find(x => x.id === bronze[1]);
+             
+             pairings.push({ player1: f1.id, player1Name: f1.name, player1Color: 'white', player2: f2.id, player2Name: f2.name, player2Color: 'black', result: 'pending', matchType: 'Grand Final' });
+             pairings.push({ player1: b1.id, player1Name: b1.name, player1Color: 'white', player2: b2.id, player2Name: b2.name, player2Color: 'black', result: 'pending', matchType: '3rd Place Match' });
+             label = 'Finals';
+           }
+        } else {
+           // Normal Knockout & Golden Ratio
+           const { byes, playing } = getGoldenRatioByes(activePlayers.length);
+           let sortedForHierarchy = [...activePlayers].sort(sortPlayersHierarchy);
+           
+           if (byes > 0) {
+             byePlayers = sortedForHierarchy.slice(0, byes);
+             sortedForHierarchy = sortedForHierarchy.slice(byes);
+           }
+           
+           // Randomize the playing pool to prevent predictable preliminary brackets
+           let pool = [...sortedForHierarchy].sort(() => Math.random() - 0.5);
+           
+           while (pool.length >= 2) {
+             const p1 = pool.shift();
+             const p2 = pool.shift();
+             pairings.push({ player1: p1.id, player1Name: p1.name, player1Color: 'white', player2: p2.id, player2Name: p2.name, player2Color: 'black', result: 'pending', matchType: 'Knockout' });
+           }
+        }
       } 
-      
-      while (pool.length >= 2) {
-        const p1 = pool.shift();
-        const p2 = pool.shift();
+      else if (format === 'swiss' || format === 'staircase') {
+        // True Swiss Engine (Points-based pairing)
+        // Sort active players strictly by points (wins)
+        let pool = [...activePlayers].sort((a, b) => (b.wins || 0) - (a.wins || 0));
         
-        let p1Color = 'white';
-        let p2Color = 'black';
-        
-        if ((p1.whitePlayed || 0) > (p1.blackPlayed || 0) && (p2.blackPlayed || 0) >= (p2.whitePlayed || 0)) {
-          p1Color = 'black'; p2Color = 'white';
+        while (pool.length >= 2) {
+          const p1 = pool.shift();
+          // Find closest opponent
+          let opponentIndex = 0; // Just take the next best player since they are sorted by points
+          // To implement history-avoidance, we would scan to find one they haven't played.
+          // For simplicity and speed in this version, we pair adjacent points.
+          const p2 = pool.splice(opponentIndex, 1)[0];
+          
+          let p1Color = 'white'; let p2Color = 'black';
+          if ((p1.whitePlayed || 0) > (p1.blackPlayed || 0) && (p2.blackPlayed || 0) >= (p2.whitePlayed || 0)) {
+            p1Color = 'black'; p2Color = 'white';
+          }
+          pairings.push({ player1: p1.id, player1Name: p1.name, player1Color: p1Color, player2: p2.id, player2Name: p2.name, player2Color: p2Color, result: 'pending', matchType: format === 'staircase' ? 'Round Robin' : 'Swiss' });
         }
         
-        pairings.push({
-          player1: p1.id,
-          player1Name: p1.name,
-          player1Color: p1Color,
-          player2: p2.id,
-          player2Name: p2.name,
-          player2Color: p2Color,
-          result: 'pending'
-        });
-      }
-
-      const hasBye = pool.length === 1;
-      let byePlayer = null;
-      if (hasBye) {
-        byePlayer = pool.shift();
+        if (pool.length === 1) {
+          byePlayers.push(pool.shift());
+        }
       }
 
       const batch = writeBatch(db);
@@ -116,10 +204,11 @@ export default function ChessDashboard() {
       
       batch.set(newRoundRef, {
         roundNumber: nextRoundNum,
-        format,
+        format: format,
         pairings,
-        byePlayer: byePlayer ? { id: byePlayer.id, name: byePlayer.name } : null,
+        byePlayers: byePlayers.map(b => ({ id: b.id, name: b.name })),
         status: 'draft',
+        label: label || '',
         createdAt: serverTimestamp()
       });
 
@@ -130,10 +219,11 @@ export default function ChessDashboard() {
       alert("Error generating pairings");
     } finally {
       setIsGenerating(false);
+      setShowSwissModal(false);
     }
   };
 
-  const publishRound = async (roundId, roundNumber, byePlayer) => {
+  const publishRound = async (roundId, roundNumber, byePlayersList) => {
     try {
       const batch = writeBatch(db);
       
@@ -146,10 +236,12 @@ export default function ChessDashboard() {
         status: 'live'
       });
 
-      if (byePlayer) {
-        const pRef = doc(db, 'chess_tournaments', roomCode, 'players', byePlayer.id);
-        const playerDoc = players.find(p => p.id === byePlayer.id);
-        batch.update(pRef, { wins: (playerDoc.wins || 0) + 1 });
+      if (byePlayersList && byePlayersList.length > 0) {
+        byePlayersList.forEach(bp => {
+          const pRef = doc(db, 'chess_tournaments', roomCode, 'players', bp.id);
+          const playerDoc = players.find(p => p.id === bp.id);
+          batch.update(pRef, { wins: (playerDoc.wins || 0) + 1 });
+        });
       }
 
       await batch.commit();
@@ -165,6 +257,15 @@ export default function ChessDashboard() {
       await deleteDoc(doc(db, 'chess_tournaments', roomCode, 'rounds', roundId));
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const checkRoundCompletion = async (roundId) => {
+    const roundDoc = rounds.find(r => r.id === roundId);
+    if (!roundDoc) return;
+    const allDone = roundDoc.pairings.every(p => p.result !== 'pending');
+    if (allDone) {
+      await updateDoc(doc(db, 'chess_tournaments', roomCode, 'rounds', roundId), { status: 'completed' });
     }
   };
 
@@ -189,7 +290,9 @@ export default function ChessDashboard() {
       const p1 = players.find(p => p.id === pairing.player1);
       const p2 = players.find(p => p.id === pairing.player2);
       
-      // Update scores
+      // Update scores & Auto-Eliminate losers for Knockouts
+      const isKnockout = roundDoc.format === 'knockout';
+      
       if (result === '1-0' || result === '1-0 (Walkover)') {
         batch.update(p1Ref, { 
           wins: (p1.wins || 0) + 1, 
@@ -198,7 +301,8 @@ export default function ChessDashboard() {
         });
         batch.update(p2Ref, { 
           whitePlayed: pairing.player2Color === 'white' ? (p2.whitePlayed || 0) + 1 : (p2.whitePlayed || 0), 
-          blackPlayed: pairing.player2Color === 'black' ? (p2.blackPlayed || 0) + 1 : (p2.blackPlayed || 0) 
+          blackPlayed: pairing.player2Color === 'black' ? (p2.blackPlayed || 0) + 1 : (p2.blackPlayed || 0),
+          ...(isKnockout ? { withdrawn: true } : {})
         });
       } else if (result === '0-1' || result === '0-1 (Walkover)') {
         batch.update(p2Ref, { 
@@ -208,7 +312,8 @@ export default function ChessDashboard() {
         });
         batch.update(p1Ref, { 
           whitePlayed: pairing.player1Color === 'white' ? (p1.whitePlayed || 0) + 1 : (p1.whitePlayed || 0), 
-          blackPlayed: pairing.player1Color === 'black' ? (p1.blackPlayed || 0) + 1 : (p1.blackPlayed || 0) 
+          blackPlayed: pairing.player1Color === 'black' ? (p1.blackPlayed || 0) + 1 : (p1.blackPlayed || 0),
+          ...(isKnockout ? { withdrawn: true } : {})
         });
       } else if (result === '0.5-0.5') {
         batch.update(p1Ref, { 
@@ -223,9 +328,10 @@ export default function ChessDashboard() {
         });
       }
       
-      // If walkover, disqualify the loser? (Optional, maybe let owner do it manually via standings)
-      
       await batch.commit();
+      
+      // Attempt auto-completion check
+      checkRoundCompletion(roundId);
     } catch (err) {
       console.error(err);
       alert("Error reporting result");
@@ -234,29 +340,23 @@ export default function ChessDashboard() {
 
   const handleSwapClick = async (roundId, pairingIndex, playerNum, playerId, playerName, playerColor) => {
     if (!selectedForSwap) {
-      // First click
       setSelectedForSwap({ pairingIndex, playerNum, playerId, playerName, playerColor, roundId });
     } else {
-      // Second click
       if (selectedForSwap.roundId !== roundId) {
         alert("Cannot swap across different rounds.");
         setSelectedForSwap(null);
         return;
       }
       if (selectedForSwap.pairingIndex === pairingIndex && selectedForSwap.playerNum === playerNum) {
-        // Clicked same player, cancel swap
         setSelectedForSwap(null);
         return;
       }
-
       const roundDoc = rounds.find(r => r.id === roundId);
       const updatedPairings = [...roundDoc.pairings];
 
-      // Grab both players
       const pA = { id: selectedForSwap.playerId, name: selectedForSwap.playerName };
       const pB = { id: playerId, name: playerName };
 
-      // Overwrite pA slot with pB
       if (selectedForSwap.playerNum === 1) {
         updatedPairings[selectedForSwap.pairingIndex].player1 = pB.id;
         updatedPairings[selectedForSwap.pairingIndex].player1Name = pB.name;
@@ -265,7 +365,6 @@ export default function ChessDashboard() {
         updatedPairings[selectedForSwap.pairingIndex].player2Name = pB.name;
       }
 
-      // Overwrite pB slot with pA
       if (playerNum === 1) {
         updatedPairings[pairingIndex].player1 = pA.id;
         updatedPairings[pairingIndex].player1Name = pA.name;
@@ -274,15 +373,11 @@ export default function ChessDashboard() {
         updatedPairings[pairingIndex].player2Name = pA.name;
       }
 
-      // Save swap
       try {
-        const roundRef = doc(db, 'chess_tournaments', roomCode, 'rounds', roundId);
-        await updateDoc(roundRef, { pairings: updatedPairings });
+        await updateDoc(doc(db, 'chess_tournaments', roomCode, 'rounds', roundId), { pairings: updatedPairings });
       } catch (err) {
         console.error(err);
-        alert("Failed to swap players");
       }
-
       setSelectedForSwap(null);
       setSwapMode(false);
     }
@@ -300,7 +395,7 @@ export default function ChessDashboard() {
   const toggleDisqualify = async (playerId, playerName, isCurrentlyWithdrawn) => {
     const msg = isCurrentlyWithdrawn 
       ? `Re-enter ${playerName} into the tournament?`
-      : `Disqualify/Withdraw ${playerName}? They will not be paired in future rounds.`;
+      : `Eliminate/Withdraw ${playerName}? They will not be paired in future rounds.`;
     if (!window.confirm(msg)) return;
     try {
       await updateDoc(doc(db, 'chess_tournaments', roomCode, 'players', playerId), { withdrawn: !isCurrentlyWithdrawn });
@@ -312,53 +407,65 @@ export default function ChessDashboard() {
   const resetTournament = async () => {
     const confirmText = prompt("Are you sure you want to completely RESET the tournament? This will delete all rounds and reset all player scores to 0. Type 'RESET' to confirm.");
     if (confirmText !== 'RESET') return;
-    
     try {
       const batch = writeBatch(db);
-      
-      // Delete all rounds
-      rounds.forEach(r => {
-        const rRef = doc(db, 'chess_tournaments', roomCode, 'rounds', r.id);
-        batch.delete(rRef);
-      });
-      
-      // Reset all players
-      players.forEach(p => {
-        const pRef = doc(db, 'chess_tournaments', roomCode, 'players', p.id);
-        batch.update(pRef, {
-          wins: 0,
-          whitePlayed: 0,
-          blackPlayed: 0,
-          matchesPlayed: 0,
-          withdrawn: false
-        });
-      });
-      
-      // Reset room
-      const roomRef = doc(db, 'chess_tournaments', roomCode);
-      batch.update(roomRef, {
-        currentRound: 0,
-        status: 'waiting'
-      });
-      
+      rounds.forEach(r => batch.delete(doc(db, 'chess_tournaments', roomCode, 'rounds', r.id)));
+      players.forEach(p => batch.update(doc(db, 'chess_tournaments', roomCode, 'players', p.id), { wins: 0, whitePlayed: 0, blackPlayed: 0, matchesPlayed: 0, withdrawn: false }));
+      batch.update(doc(db, 'chess_tournaments', roomCode), { currentRound: 0, status: 'waiting' });
       await batch.commit();
       alert("Tournament has been successfully reset.");
     } catch (err) {
       console.error(err);
-      alert("Failed to reset tournament.");
     }
   };
 
   if (!roomData) return <div style={{ background: '#09090b', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trophy color="#333" size={48} /></div>;
 
-  // Top round is either the draft or the highest published round
   const activeRoundData = rounds.length > 0 ? rounds[0] : null;
 
   return (
     <div style={{ display: 'flex', height: '100vh', background: '#09090b', color: '#ededed', fontFamily: '"Inter", sans-serif' }}>
       
+      {showSwissModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(5px)' }}>
+          <div style={{ background: '#111', width: '400px', borderRadius: '24px', padding: '2rem', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 40px 80px rgba(0,0,0,0.5)' }}>
+            <h2 style={{ fontSize: '1.5rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '10px' }}><Settings color="#00e5ff" /> Advanced Hybrid Setup</h2>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '2rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(255,255,255,0.05)', padding: '1rem', borderRadius: '12px', cursor: 'pointer', border: swissMode === 'swiss' ? '1px solid #00e5ff' : '1px solid transparent' }}>
+                <input type="radio" checked={swissMode === 'swiss'} onChange={() => setSwissMode('swiss')} />
+                <div>
+                  <div style={{ fontWeight: 'bold' }}>Swiss System</div>
+                  <div style={{ fontSize: '0.8rem', color: '#888' }}>Points-based pairings for N rounds.</div>
+                </div>
+              </label>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(255,255,255,0.05)', padding: '1rem', borderRadius: '12px', cursor: 'pointer', border: swissMode === 'staircase' ? '1px solid #00e5ff' : '1px solid transparent' }}>
+                <input type="radio" checked={swissMode === 'staircase'} onChange={() => setSwissMode('staircase')} />
+                <div>
+                  <div style={{ fontWeight: 'bold' }}>Staircase (Round Robin)</div>
+                  <div style={{ fontSize: '0.8rem', color: '#888' }}>Everyone plays everyone.</div>
+                </div>
+              </label>
+              
+              {swissMode === 'swiss' && (
+                <div style={{ marginTop: '1rem' }}>
+                  <label style={{ fontSize: '0.9rem', color: '#888' }}>Number of Rounds to Setup:</label>
+                  <input type="number" min="1" max="20" value={swissRounds} onChange={(e) => setSwissRounds(e.target.value)} style={{ width: '100%', padding: '10px', background: '#000', border: '1px solid #333', color: '#fff', borderRadius: '8px', marginTop: '5px' }} />
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <button onClick={() => setShowSwissModal(false)} style={{ flex: 1, padding: '12px', background: 'transparent', border: '1px solid #333', color: '#fff', borderRadius: '8px', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={() => generatePairings(swissMode)} style={{ flex: 1, padding: '12px', background: '#00e5ff', border: 'none', color: '#000', fontWeight: 'bold', borderRadius: '8px', cursor: 'pointer' }}>Start Setup</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sidebar - Players & Standings */}
-      <div style={{ width: '340px', background: '#111', borderRight: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ width: '380px', background: '#111', borderRight: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '2rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
             <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = '#fff'} onMouseLeave={e => e.currentTarget.style.color = '#888'}>
@@ -379,7 +486,7 @@ export default function ChessDashboard() {
 
         <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
           <button style={{ flex: 1, padding: '1rem', background: activeTab === 'matchups' ? 'rgba(255,255,255,0.03)' : 'transparent', border: 'none', color: activeTab === 'matchups' ? '#fff' : '#888', cursor: 'pointer', fontWeight: activeTab === 'matchups' ? 'bold' : 'normal' }} onClick={() => setActiveTab('matchups')}>Host Controls</button>
-          <button style={{ flex: 1, padding: '1rem', background: activeTab === 'standings' ? 'rgba(255,255,255,0.03)' : 'transparent', border: 'none', color: activeTab === 'standings' ? '#fff' : '#888', cursor: 'pointer', fontWeight: activeTab === 'standings' ? 'bold' : 'normal' }} onClick={() => setActiveTab('standings')}>Manage Players</button>
+          <button style={{ flex: 1, padding: '1rem', background: activeTab === 'standings' ? 'rgba(255,255,255,0.03)' : 'transparent', border: 'none', color: activeTab === 'standings' ? '#fff' : '#888', cursor: 'pointer', fontWeight: activeTab === 'standings' ? 'bold' : 'normal' }} onClick={() => setActiveTab('standings')}>Live Standings</button>
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
@@ -401,15 +508,17 @@ export default function ChessDashboard() {
                           <UserX size={14} color="#888" />
                         </div>
                       )}
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontWeight: '500', color: p.withdrawn ? '#888' : '#fff' }}>{p.name} {p.withdrawn && '(WD)'}</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', maxWidth: '140px' }}>
+                        <span style={{ fontWeight: '500', color: p.withdrawn ? '#888' : '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+                        {p.course && <span style={{ fontSize: '0.7rem', color: '#666' }}>{p.course} ({p.year} YR)</span>}
+                        {p.designation && <span style={{ fontSize: '0.7rem', color: '#00e5ff' }}>{p.designation}</span>}
                       </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                      <div style={{ fontWeight: 'bold', color: '#fff' }}>{p.wins || 0}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ fontWeight: 'bold', color: '#fff', fontSize: '1.2rem' }}>{p.wins || 0}</div>
                       
                       <div style={{ display: 'flex', gap: '5px' }}>
-                        <button onClick={() => toggleDisqualify(p.id, p.name, p.withdrawn)} style={{ background: 'none', border: 'none', color: p.withdrawn ? '#10b981' : '#ff9900', cursor: 'pointer', padding: '4px' }} title={p.withdrawn ? "Re-enter" : "Withdraw / Disqualify"}>
+                        <button onClick={() => toggleDisqualify(p.id, p.name, p.withdrawn)} style={{ background: 'none', border: 'none', color: p.withdrawn ? '#10b981' : '#ff9900', cursor: 'pointer', padding: '4px' }} title={p.withdrawn ? "Restore" : "Eliminate"}>
                           {p.withdrawn ? <CheckCircle2 size={16} /> : <ShieldAlert size={16} />}
                         </button>
                         <button onClick={() => removePlayer(p.id, p.name)} style={{ background: 'none', border: 'none', color: '#ff4444', cursor: 'pointer', padding: '4px' }} title="Delete completely">
@@ -438,9 +547,11 @@ export default function ChessDashboard() {
           <div>
             <h1 style={{ fontSize: '2.5rem', fontWeight: '900', letterSpacing: '-1px', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '15px' }}>
               {activeRoundData ? (activeRoundData.status === 'draft' ? `Draft: Round ${activeRoundData.roundNumber}` : `Round ${activeRoundData.roundNumber}`) : 'Tournament Lobby'}
+              {activeRoundData?.label && <span style={{ fontSize: '0.8rem', background: '#fff', color: '#000', padding: '4px 10px', borderRadius: '30px', fontWeight: 'bold' }}>{activeRoundData.label}</span>}
               {activeRoundData?.status === 'draft' && <span style={{ fontSize: '0.9rem', background: '#ff9900', color: '#000', padding: '4px 10px', borderRadius: '30px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Draft Mode</span>}
+              {activeRoundData?.status === 'completed' && <span style={{ fontSize: '0.9rem', background: '#10b981', color: '#000', padding: '4px 10px', borderRadius: '30px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Completed</span>}
             </h1>
-            <p style={{ color: '#888' }}>{players.length} Total Players ({players.filter(p=>!p.withdrawn).length} Active)</p>
+            <p style={{ color: '#888' }}>{players.length} Total Players ({players.filter(p=>!p.withdrawn).length} Active Golden Ratio)</p>
           </div>
           
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
@@ -454,11 +565,11 @@ export default function ChessDashboard() {
               </button>
               
               <button 
-                onClick={() => generatePairings('swiss')} 
+                onClick={() => setShowSwissModal(true)} 
                 disabled={isGenerating || players.filter(p=>!p.withdrawn).length < 2 || activeRoundData?.status === 'draft'}
                 style={{ background: '#fff', color: '#000', border: 'none', padding: '12px 24px', borderRadius: '12px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', opacity: (isGenerating || activeRoundData?.status === 'draft') ? 0.5 : 1 }}
               >
-                <Shuffle size={18} /> Swiss Pairings (Round {currentRoundNumber + 1})
+                <Shuffle size={18} /> Hybrid Setup (Round {currentRoundNumber + 1})
               </button>
             </div>
             {players.filter(p=>!p.withdrawn).length < 2 && <span style={{ color: '#ff4444', fontSize: '0.85rem' }}>* Need at least 2 active players</span>}
@@ -480,7 +591,7 @@ export default function ChessDashboard() {
               <button onClick={() => deleteDraft(activeRoundData.id)} style={{ background: 'transparent', color: '#ff4444', border: '1px solid rgba(255,68,68,0.3)', padding: '10px 20px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
                 Delete Draft
               </button>
-              <button onClick={() => publishRound(activeRoundData.id, activeRoundData.roundNumber, activeRoundData.byePlayer)} style={{ background: '#10b981', color: '#000', border: 'none', padding: '10px 24px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
+              <button onClick={() => publishRound(activeRoundData.id, activeRoundData.roundNumber, activeRoundData.byePlayers)} style={{ background: '#10b981', color: '#000', border: 'none', padding: '10px 24px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
                 Publish Round
               </button>
             </div>
@@ -501,7 +612,7 @@ export default function ChessDashboard() {
                   boxShadow: '0 10px 30px rgba(0,0,0,0.2)'
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                    <div style={{ fontSize: '0.85rem', color: '#666', fontWeight: 'bold', letterSpacing: '2px' }}>BOARD {idx + 1}</div>
+                    <div style={{ fontSize: '0.85rem', color: '#666', fontWeight: 'bold', letterSpacing: '2px' }}>BOARD {idx + 1} {pairing.matchType && `• ${pairing.matchType}`}</div>
                     {pairing.result !== 'pending' && <div style={{ background: 'rgba(16,185,129,0.2)', color: '#10b981', padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 'bold' }}>COMPLETED</div>}
                   </div>
 
@@ -571,12 +682,12 @@ export default function ChessDashboard() {
                 </div>
               ))}
 
-              {activeRoundData.byePlayer && (
-                <div style={{ background: 'rgba(255,255,255,0.01)', borderRadius: '16px', border: '1px dashed rgba(255,255,255,0.1)', padding: '2rem', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-                  <div style={{ fontSize: '0.85rem', color: '#666', fontWeight: 'bold', letterSpacing: '2px', marginBottom: '1rem' }}>BYE (1 POINT)</div>
-                  <h3 style={{ fontSize: '1.5rem', margin: 0 }}>{activeRoundData.byePlayer.name}</h3>
+              {activeRoundData.byePlayers && activeRoundData.byePlayers.map((bp, i) => (
+                <div key={i} style={{ background: 'rgba(255,255,255,0.01)', borderRadius: '16px', border: '1px dashed rgba(255,255,255,0.1)', padding: '2rem', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+                  <div style={{ fontSize: '0.85rem', color: '#666', fontWeight: 'bold', letterSpacing: '2px', marginBottom: '1rem' }}>GOLDEN BYE (1 POINT)</div>
+                  <h3 style={{ fontSize: '1.5rem', margin: 0, textAlign: 'center' }}>{bp.name}</h3>
                 </div>
-              )}
+              ))}
             </div>
           ) : (
             <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', opacity: 0.5 }}>

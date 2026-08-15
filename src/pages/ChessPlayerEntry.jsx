@@ -19,6 +19,10 @@ export default function ChessPlayerEntry() {
     name: '',
     rating: '',
     collegeName: '',
+    course: 'B.Tech',
+    customCourse: '',
+    year: '1st',
+    semester: '1',
     rollNumber: '',
     address: '',
     isCoreMember: 'No',
@@ -104,6 +108,9 @@ export default function ChessPlayerEntry() {
         name: formData.name.trim(),
         rating: formData.rating ? Number(formData.rating) : 1200,
         collegeName: formData.collegeName.trim(),
+        course: formData.course === 'Others' ? formData.customCourse.trim() : formData.course,
+        year: formData.year,
+        semester: formData.semester,
         rollNumber: cleanRollNumber,
         address: formData.address.trim(),
         isCoreMember: formData.isCoreMember,
@@ -216,6 +223,65 @@ export default function ChessPlayerEntry() {
                 onChange={e => setFormData({...formData, collegeName: e.target.value})}
               />
             </div>
+
+            <div className="input-group">
+              <label>Course *</label>
+              <select 
+                className="premium-input" 
+                value={formData.course}
+                onChange={e => setFormData({...formData, course: e.target.value})}
+              >
+                <option value="B.Tech">B.Tech</option>
+                <option value="M.Tech">M.Tech</option>
+                <option value="B.Sc">B.Sc</option>
+                <option value="B.Com">B.Com</option>
+                <option value="B.A">B.A</option>
+                <option value="Others">Others</option>
+              </select>
+            </div>
+
+            {formData.course === 'Others' && (
+              <div className="input-group">
+                <label>Specify Course *</label>
+                <input 
+                  type="text" 
+                  className="premium-input" 
+                  placeholder="e.g. BCA, BBA, PhD"
+                  value={formData.customCourse}
+                  onChange={e => setFormData({...formData, customCourse: e.target.value})}
+                />
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <div className="input-group" style={{ flex: 1 }}>
+                <label>Year *</label>
+                <select 
+                  className="premium-input" 
+                  value={formData.year}
+                  onChange={e => setFormData({...formData, year: e.target.value})}
+                >
+                  <option value="1st">1st Year</option>
+                  <option value="2nd">2nd Year</option>
+                  <option value="3rd">3rd Year</option>
+                  <option value="4th">4th Year</option>
+                  <option value="5th">5th Year</option>
+                </select>
+              </div>
+
+              <div className="input-group" style={{ flex: 1 }}>
+                <label>Semester *</label>
+                <select 
+                  className="premium-input" 
+                  value={formData.semester}
+                  onChange={e => setFormData({...formData, semester: e.target.value})}
+                >
+                  {[...Array(10)].map((_, i) => (
+                    <option key={i+1} value={i+1}>Semester {i+1}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
             
             <div className="input-group">
               <label>Roll Number *</label>
@@ -307,7 +373,7 @@ export default function ChessPlayerEntry() {
               className="btn-primary" 
               style={{ width: '100%', marginTop: '1rem', padding: '1rem', border: 'none' }} 
               onClick={submitRegistration} 
-              disabled={isLoading || !formData.name || !formData.collegeName || !formData.rollNumber || !formData.address || (formData.isCoreMember === 'Yes' && !formData.designation)}
+              disabled={isLoading || !formData.name || !formData.collegeName || !formData.rollNumber || !formData.address || (formData.isCoreMember === 'Yes' && !formData.designation) || (formData.course === 'Others' && !formData.customCourse)}
             >
               {isLoading ? 'Registering...' : 'Register for Tournament'}
             </button>

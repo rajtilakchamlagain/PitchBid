@@ -157,7 +157,11 @@ export default function ChessViewerRoom() {
                         <Users size={16} color="#555" />
                       </div>
                     )}
-                    <span style={{ fontWeight: '500', fontSize: '1.05rem', color: idx < 3 ? '#fff' : '#ccc' }}>{p.name}</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', maxWidth: '140px' }}>
+                      <span style={{ fontWeight: '500', fontSize: '1.05rem', color: idx < 3 ? '#fff' : '#ccc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+                      {p.course && <span style={{ fontSize: '0.7rem', color: '#666' }}>{p.course} ({p.year} YR)</span>}
+                      {p.designation && <span style={{ fontSize: '0.7rem', color: '#00e5ff' }}>{p.designation}</span>}
+                    </div>
                   </div>
                   <div style={{ fontWeight: 'bold', color: '#fff', fontSize: '1.1rem' }}>{p.wins || 0}</div>
                 </motion.div>
@@ -209,7 +213,9 @@ export default function ChessViewerRoom() {
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                        <div style={{ fontSize: '0.85rem', color: '#888', fontWeight: '600', letterSpacing: '1px' }}>BOARD {idx + 1}</div>
+                        <div style={{ fontSize: '0.85rem', color: '#888', fontWeight: '600', letterSpacing: '1px' }}>
+                          BOARD {idx + 1} {pairing.matchType && <span style={{ color: '#00e5ff', marginLeft: '5px' }}>• {pairing.matchType}</span>}
+                        </div>
                         {pairing.result !== 'pending' && (
                           <div style={{ background: 'rgba(255,255,255,0.1)', color: '#fff', padding: '4px 10px', borderRadius: '30px', fontSize: '0.75rem', fontWeight: 'bold' }}>
                             FINISHED
@@ -266,8 +272,9 @@ export default function ChessViewerRoom() {
                   ))}
                 </AnimatePresence>
 
-                {activeRound.byePlayer && (
+                {activeRound.byePlayers && activeRound.byePlayers.map((bp, i) => (
                   <motion.div 
+                    key={i}
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     style={{ 
@@ -282,10 +289,10 @@ export default function ChessViewerRoom() {
                       textAlign: 'center'
                     }}
                   >
-                    <div style={{ fontSize: '0.85rem', color: '#666', fontWeight: '600', letterSpacing: '1px', marginBottom: '1rem' }}>BYE ROUND (1 POINT)</div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{activeRound.byePlayer.name}</div>
+                    <div style={{ fontSize: '0.85rem', color: '#ffd700', fontWeight: '600', letterSpacing: '1px', marginBottom: '1rem' }}>GOLDEN BYE (1 POINT)</div>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{bp.name}</div>
                   </motion.div>
-                )}
+                ))}
 
               </div>
             </div>
