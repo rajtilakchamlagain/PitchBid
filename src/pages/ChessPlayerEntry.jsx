@@ -20,6 +20,7 @@ export default function ChessPlayerEntry() {
     rating: '',
     collegeName: '',
     course: 'B.Tech',
+    branch: 'Computer Science and Engineering (CSE)',
     customCourse: '',
     year: '1st',
     semester: '1',
@@ -109,6 +110,7 @@ export default function ChessPlayerEntry() {
         rating: formData.rating ? Number(formData.rating) : 1200,
         collegeName: formData.collegeName.trim(),
         course: formData.course === 'Others' ? formData.customCourse.trim() : formData.course,
+        branch: formData.course === 'B.Tech' ? formData.branch : '',
         year: formData.year,
         semester: formData.semester,
         rollNumber: cleanRollNumber,
@@ -239,6 +241,28 @@ export default function ChessPlayerEntry() {
                 <option value="Others">Others</option>
               </select>
             </div>
+
+            {formData.course === 'B.Tech' && (
+              <div className="input-group">
+                <label>Branch (ASTU) *</label>
+                <select 
+                  className="premium-input" 
+                  value={formData.branch}
+                  onChange={e => setFormData({...formData, branch: e.target.value})}
+                >
+                  <option value="Computer Science and Engineering (CSE)">Computer Science and Engineering (CSE)</option>
+                  <option value="Civil Engineering (CE)">Civil Engineering (CE)</option>
+                  <option value="Mechanical Engineering (ME)">Mechanical Engineering (ME)</option>
+                  <option value="Electrical Engineering (EE)">Electrical Engineering (EE)</option>
+                  <option value="Electronics and Communication (ECE)">Electronics and Communication (ECE)</option>
+                  <option value="Chemical Engineering (ChE)">Chemical Engineering (ChE)</option>
+                  <option value="Instrumentation Engineering (IE)">Instrumentation Engineering (IE)</option>
+                  <option value="Industrial and Production (IPE)">Industrial and Production (IPE)</option>
+                  <option value="Power Electronics and Instrumentation (PEI)">Power Electronics and Instrumentation (PEI)</option>
+                  <option value="Others">Others</option>
+                </select>
+              </div>
+            )}
 
             {formData.course === 'Others' && (
               <div className="input-group">

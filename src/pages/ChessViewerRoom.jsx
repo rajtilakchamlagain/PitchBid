@@ -159,7 +159,7 @@ export default function ChessViewerRoom() {
                     )}
                     <div style={{ display: 'flex', flexDirection: 'column', maxWidth: '140px' }}>
                       <span style={{ fontWeight: '500', fontSize: '1.05rem', color: idx < 3 ? '#fff' : '#ccc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
-                      {p.course && <span style={{ fontSize: '0.7rem', color: '#666' }}>{p.course} ({p.year} YR)</span>}
+                      {p.course && <span style={{ fontSize: '0.7rem', color: '#666' }}>{p.course} {p.branch && `- ${p.branch.includes('(') ? p.branch.match(/\((.*?)\)/)[1] : p.branch}`} ({p.year} YR)</span>}
                       {p.designation && <span style={{ fontSize: '0.7rem', color: '#00e5ff' }}>{p.designation}</span>}
                     </div>
                   </div>
