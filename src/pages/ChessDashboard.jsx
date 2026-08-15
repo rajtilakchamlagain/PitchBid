@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Trophy, Swords, Shuffle, ArrowLeft, Trash2, Edit2, UserX, CheckCircle2, MoreVertical, ShieldAlert } from 'lucide-react';
+import { Trophy, Swords, Shuffle, ArrowLeft, Trash2, Edit2, UserX, CheckCircle2, MoreVertical, ShieldAlert, RotateCcw } from 'lucide-react';
 import { doc, collection, onSnapshot, updateDoc, writeBatch, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -309,6 +309,46 @@ export default function ChessDashboard() {
     }
   };
 
+  const resetTournament = async () => {
+    const confirmText = prompt("Are you sure you want to completely RESET the tournament? This will delete all rounds and reset all player scores to 0. Type 'RESET' to confirm.");
+    if (confirmText !== 'RESET') return;
+    
+    try {
+      const batch = writeBatch(db);
+      
+      // Delete all rounds
+      rounds.forEach(r => {
+        const rRef = doc(db, 'chess_tournaments', roomCode, 'rounds', r.id);
+        batch.delete(rRef);
+      });
+      
+      // Reset all players
+      players.forEach(p => {
+        const pRef = doc(db, 'chess_tournaments', roomCode, 'players', p.id);
+        batch.update(pRef, {
+          wins: 0,
+          whitePlayed: 0,
+          blackPlayed: 0,
+          matchesPlayed: 0,
+          withdrawn: false
+        });
+      });
+      
+      // Reset room
+      const roomRef = doc(db, 'chess_tournaments', roomCode);
+      batch.update(roomRef, {
+        currentRound: 0,
+        status: 'waiting'
+      });
+      
+      await batch.commit();
+      alert("Tournament has been successfully reset.");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to reset tournament.");
+    }
+  };
+
   if (!roomData) return <div style={{ background: '#09090b', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trophy color="#333" size={48} /></div>;
 
   // Top round is either the draft or the highest published round
@@ -320,9 +360,14 @@ export default function ChessDashboard() {
       {/* Sidebar - Players & Standings */}
       <div style={{ width: '340px', background: '#111', borderRight: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '2rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-          <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1.5rem', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = '#fff'} onMouseLeave={e => e.currentTarget.style.color = '#888'}>
-            <ArrowLeft size={16} /> Exit Dashboard
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+            <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = '#fff'} onMouseLeave={e => e.currentTarget.style.color = '#888'}>
+              <ArrowLeft size={16} /> Exit Dashboard
+            </button>
+            <button onClick={resetTournament} style={{ background: 'none', border: 'none', color: '#ff4444', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem', fontWeight: 'bold' }} title="Reset Entire Tournament">
+              <RotateCcw size={14} /> Reset
+            </button>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
             {roomData.logoUrl ? <img src={roomData.logoUrl} style={{ width: '48px', height: '48px', borderRadius: '12px', objectFit: 'cover' }} /> : <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'linear-gradient(135deg, #1f1f1f, #09090b)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(255,255,255,0.1)' }}><Trophy size={20} color="#fff" /></div>}
             <div>
