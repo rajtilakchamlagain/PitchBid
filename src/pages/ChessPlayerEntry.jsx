@@ -15,7 +15,12 @@ export default function ChessPlayerEntry() {
   const [formData, setFormData] = useState({
     playerCode: '',
     name: '',
-    rating: ''
+    rating: '',
+    collegeName: '',
+    rollNumber: '',
+    address: '',
+    isCoreMember: 'No',
+    designation: ''
   });
 
   const verifyCode = async () => {
@@ -53,8 +58,8 @@ export default function ChessPlayerEntry() {
   };
 
   const submitRegistration = async () => {
-    if (!formData.name) {
-      setErrorMsg("Name is required");
+    if (!formData.name || !formData.collegeName || !formData.rollNumber || !formData.address) {
+      setErrorMsg("Please fill in all compulsory fields.");
       return;
     }
     
@@ -63,6 +68,11 @@ export default function ChessPlayerEntry() {
       await addDoc(collection(db, 'chess_tournaments', validatedRoomId, 'players'), {
         name: formData.name,
         rating: formData.rating ? Number(formData.rating) : 1200,
+        collegeName: formData.collegeName,
+        rollNumber: formData.rollNumber,
+        address: formData.address,
+        isCoreMember: formData.isCoreMember,
+        designation: formData.isCoreMember === 'Yes' ? formData.designation : '',
         wins: 0,
         matchesPlayed: 0,
         whitePlayed: 0,
@@ -134,6 +144,64 @@ export default function ChessPlayerEntry() {
             </div>
             
             <div className="input-group">
+              <label>College Name *</label>
+              <input 
+                type="text" 
+                className="premium-input" 
+                placeholder="Enter your college name"
+                value={formData.collegeName}
+                onChange={e => setFormData({...formData, collegeName: e.target.value})}
+              />
+            </div>
+            
+            <div className="input-group">
+              <label>Roll Number *</label>
+              <input 
+                type="text" 
+                className="premium-input" 
+                placeholder="Enter your roll number"
+                value={formData.rollNumber}
+                onChange={e => setFormData({...formData, rollNumber: e.target.value})}
+              />
+            </div>
+            
+            <div className="input-group">
+              <label>Hostel / PG Name (Address) *</label>
+              <input 
+                type="text" 
+                className="premium-input" 
+                placeholder="e.g. Block A, Room 101"
+                value={formData.address}
+                onChange={e => setFormData({...formData, address: e.target.value})}
+              />
+            </div>
+            
+            <div className="input-group">
+              <label>Are you a Core Member? *</label>
+              <select 
+                className="premium-input" 
+                value={formData.isCoreMember}
+                onChange={e => setFormData({...formData, isCoreMember: e.target.value})}
+              >
+                <option value="No">No</option>
+                <option value="Yes">Yes</option>
+              </select>
+            </div>
+            
+            {formData.isCoreMember === 'Yes' && (
+              <div className="input-group">
+                <label>Designation *</label>
+                <input 
+                  type="text" 
+                  className="premium-input" 
+                  placeholder="e.g. Event Coordinator"
+                  value={formData.designation}
+                  onChange={e => setFormData({...formData, designation: e.target.value})}
+                />
+              </div>
+            )}
+            
+            <div className="input-group">
               <label>FIDE/Online Rating (Optional)</label>
               <input 
                 type="number" 
@@ -150,7 +218,7 @@ export default function ChessPlayerEntry() {
               className="btn-primary" 
               style={{ width: '100%', marginTop: '1rem', padding: '1rem', border: 'none' }} 
               onClick={submitRegistration} 
-              disabled={isLoading || !formData.name}
+              disabled={isLoading || !formData.name || !formData.collegeName || !formData.rollNumber || !formData.address || (formData.isCoreMember === 'Yes' && !formData.designation)}
             >
               {isLoading ? 'Registering...' : 'Register for Tournament'}
             </button>
