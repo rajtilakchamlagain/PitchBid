@@ -20,7 +20,9 @@ export default function ChessPlayerEntry() {
     rollNumber: '',
     address: '',
     isCoreMember: 'No',
-    designation: ''
+    designation: '',
+    fideId: '',
+    aicfId: ''
   });
 
   const verifyCode = async () => {
@@ -73,6 +75,8 @@ export default function ChessPlayerEntry() {
         address: formData.address,
         isCoreMember: formData.isCoreMember,
         designation: formData.isCoreMember === 'Yes' ? formData.designation : '',
+        fideId: formData.fideId,
+        aicfId: formData.aicfId,
         wins: 0,
         matchesPlayed: 0,
         whitePlayed: 0,
@@ -209,6 +213,28 @@ export default function ChessPlayerEntry() {
                 placeholder="e.g. 1500"
                 value={formData.rating}
                 onChange={e => setFormData({...formData, rating: e.target.value})}
+              />
+            </div>
+            
+            <div className="input-group">
+              <label>FIDE ID (Optional)</label>
+              <input 
+                type="text" 
+                className="premium-input" 
+                placeholder="e.g. 1234567"
+                value={formData.fideId}
+                onChange={e => setFormData({...formData, fideId: e.target.value})}
+              />
+            </div>
+            
+            <div className="input-group">
+              <label>AICF ID (Optional)</label>
+              <input 
+                type="text" 
+                className="premium-input" 
+                placeholder="e.g. 987654"
+                value={formData.aicfId}
+                onChange={e => setFormData({...formData, aicfId: e.target.value})}
               />
             </div>
             
