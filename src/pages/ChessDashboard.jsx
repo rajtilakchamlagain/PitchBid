@@ -176,16 +176,34 @@ export default function ChessDashboard() {
         }
       } 
       else if (format === 'swiss' || format === 'staircase') {
-        // True Swiss Engine (Points-based pairing)
-        // Sort active players strictly by points (wins)
+        // Build History Map to avoid duplicate matchups
+        const history = {};
+        activePlayers.forEach(p => history[p.id] = new Set());
+        
+        rounds.forEach(r => {
+          if (r.status === 'completed' || r.status === 'published') {
+            r.pairings.forEach(pairing => {
+              if (history[pairing.player1]) history[pairing.player1].add(pairing.player2);
+              if (history[pairing.player2]) history[pairing.player2].add(pairing.player1);
+            });
+          }
+        });
+
+        // Sort active players strictly by points
         let pool = [...activePlayers].sort((a, b) => (b.wins || 0) - (a.wins || 0));
         
         while (pool.length >= 2) {
           const p1 = pool.shift();
-          // Find closest opponent
-          let opponentIndex = 0; // Just take the next best player since they are sorted by points
-          // To implement history-avoidance, we would scan to find one they haven't played.
-          // For simplicity and speed in this version, we pair adjacent points.
+          
+          // Find closest opponent who hasn't played p1
+          let opponentIndex = 0; 
+          for (let i = 0; i < pool.length; i++) {
+            if (!history[p1.id].has(pool[i].id)) {
+              opponentIndex = i;
+              break;
+            }
+          }
+          
           const p2 = pool.splice(opponentIndex, 1)[0];
           
           let p1Color = 'white'; let p2Color = 'black';
@@ -719,12 +737,22 @@ export default function ChessDashboard() {
                 <Swords size={18} /> Knockout Pairings
               </button>
               
+              {activeRoundData && (activeRoundData.format === 'swiss' || activeRoundData.format === 'staircase') && (
+                <button 
+                  onClick={() => generatePairings(activeRoundData.format)} 
+                  disabled={isGenerating || players.filter(p=>!p.withdrawn).length < 2 || activeRoundData?.status === 'draft'}
+                  style={{ background: '#10b981', color: '#000', border: 'none', padding: '12px 24px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', opacity: (isGenerating || activeRoundData?.status === 'draft') ? 0.5 : 1 }}
+                >
+                  <CheckCircle2 size={18} /> Continue {activeRoundData.format === 'swiss' ? 'Swiss' : 'Round Robin'} (Round {currentRoundNumber + 1})
+                </button>
+              )}
+
               <button 
                 onClick={() => setShowSwissModal(true)} 
                 disabled={isGenerating || players.filter(p=>!p.withdrawn).length < 2 || activeRoundData?.status === 'draft'}
                 style={{ background: '#fff', color: '#000', border: 'none', padding: '12px 24px', borderRadius: '12px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', opacity: (isGenerating || activeRoundData?.status === 'draft') ? 0.5 : 1 }}
               >
-                <Shuffle size={18} /> Hybrid Setup (Round {currentRoundNumber + 1})
+                <Shuffle size={18} /> {activeRoundData && (activeRoundData.format === 'swiss' || activeRoundData.format === 'staircase') ? 'Change Format' : `Hybrid Setup (Round ${currentRoundNumber + 1})`}
               </button>
             </div>
             {players.filter(p=>!p.withdrawn).length < 2 && <span style={{ color: '#ff4444', fontSize: '0.85rem' }}>* Need at least 2 active players</span>}
