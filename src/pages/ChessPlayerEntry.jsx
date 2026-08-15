@@ -117,8 +117,8 @@ export default function ChessPlayerEntry() {
         address: formData.address.trim(),
         isCoreMember: formData.isCoreMember,
         designation: formData.isCoreMember === 'Yes' ? formData.designation : '',
-        fideId: formData.fideId.trim(),
-        aicfId: formData.aicfId.trim(),
+        fideId: formData.fideId ? formData.fideId.trim() : '',
+        aicfId: formData.aicfId ? formData.aicfId.trim() : '',
         photoUrl: photoUrl,
         wins: 0,
         matchesPlayed: 0,
@@ -130,7 +130,7 @@ export default function ChessPlayerEntry() {
       setStep(3);
     } catch (err) {
       console.error(err);
-      alert("Failed to register.");
+      setErrorMsg("Failed to register: " + err.message);
     } finally {
       setIsLoading(false);
     }

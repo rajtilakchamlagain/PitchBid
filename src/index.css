@@ -230,6 +230,11 @@ body {
   box-shadow: 0 0 0 2px rgba(0, 255, 136, 0.1);
 }
 
+select.premium-input option {
+  background: var(--panel-bg);
+  color: var(--text-main);
+}
+
 .btn-primary {
   background: linear-gradient(135deg, var(--primary) 0%, #00b35f 100%);
   color: #000;
