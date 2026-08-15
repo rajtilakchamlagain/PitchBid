@@ -20,7 +20,7 @@ export default function ChessPlayerEntry() {
     rollNumber: '',
     address: '',
     isCoreMember: 'No',
-    designation: '',
+    designation: 'President',
     fideId: '',
     aicfId: ''
   });
@@ -195,13 +195,17 @@ export default function ChessPlayerEntry() {
             {formData.isCoreMember === 'Yes' && (
               <div className="input-group">
                 <label>Designation *</label>
-                <input 
-                  type="text" 
+                <select 
                   className="premium-input" 
-                  placeholder="e.g. Event Coordinator"
                   value={formData.designation}
                   onChange={e => setFormData({...formData, designation: e.target.value})}
-                />
+                >
+                  <option value="President">President</option>
+                  <option value="Vice President">Vice President</option>
+                  <option value="Secretary">Secretary</option>
+                  <option value="Asst. Secretary">Asst. Secretary</option>
+                  <option value="Event Management">Event Management</option>
+                </select>
               </div>
             )}
             
